@@ -77,11 +77,11 @@ o.createEvent("filtered", {
     }
 });
 
-o.on("filtered", () => console.log("always"), null, {
+o.on("filtered", () => console.log("always"), {
     userData: { always: true }
 });
 
-o.on("filtered", () => console.log("param"), null, {
+o.on("filtered", () => console.log("param"), {
     userData: { param: 1 }
 });
 
@@ -251,7 +251,7 @@ o.resumeAllEvents();
 
 // Check if already subscribed
 o.hasListener(
-    /* required */ "eventName",
+    /* optional */ "eventName",
     /* optional */ function | number,
     /* optional */ context
 );
