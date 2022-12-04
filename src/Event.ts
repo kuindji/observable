@@ -1,6 +1,5 @@
 import type { EventOptions, ListenerOptions, Listener, 
                 EventFilterCallback, ListenerPublicInfo } from "./lib/types"
-import nextUid from "./lib/nextUid"
 import async from "./lib/async"
 
 
@@ -8,12 +7,8 @@ class Event {
 
     name:string
     listeners:Listener[] = []
-    map:{[key:string]: Listener} = {}
-    hash:string
-    uni:string
     suspended:boolean = false
     lid:number = 0
-    fid:number = 0
     returnResult:string|boolean|null = null
     limit:number = 0
     triggered:number = 0
@@ -27,8 +22,6 @@ class Event {
 
     constructor(name: string, options?: EventOptions|string|boolean) {
         this.name   = name;
-        this.hash   = nextUid();
-        this.uni    = '$$' + name + '_' + this.hash;
 
         if (options !== undefined) {
             if (typeof options === "string" || typeof options === "boolean" || options === null) {
