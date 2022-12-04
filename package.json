@@ -1,8 +1,9 @@
 {
     "name": "@kuindji/observable",
     "version": "1.0.0",
-    "description": "",
-    "main": "main/index.js",
+    "description": "A javascript event system implementing multiple patterns: observable, collector and pipe.",
+    "main": "dist/index.js",
+    "types": "dist/index.d.ts",
     "files": [
         "dist/**/*"
     ],
@@ -11,6 +12,10 @@
         "format": "prettier --write \"src/**/*.ts\" \"src/**/*.js\"",
         "lint": "tslint -p tsconfig.json",
         "test": "jest --config jestconfig.json"
+    },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/kuindji/observable.git"
     },
     "author": "Ivan Kuindzhi",
     "license": "ISC",

@@ -1,5 +1,5 @@
 import Event from "./Event"
-import type { EventOptions, ListenerOptions, Listener } from "./lib/types"
+import type { EventOptions, ListenerOptions } from "./lib/types"
 
 class Observable {
 
