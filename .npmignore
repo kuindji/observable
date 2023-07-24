@@ -1,5 +1,6 @@
 src
 tsconfig.json
+tsconfig-build.json
 tslint.json
 .prettierrc
-__tests__
+tests

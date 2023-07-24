@@ -1,152 +1,66 @@
-import Event from "./Event"
-import type { EventOptions, ListenerOptions } from "./lib/types"
+import ObservableEvent from "./ObservableEvent"
+import { ReturnType } from "./types"
+import type { EventOptions, ListenerOptions, ListenerFunction, ReturnValue } from "./types"
 
-class Observable {
+type EventsMap = {
+    [key: string]: ObservableEvent
+}
 
-    events:{ [key: string]: Event } = {}
+/**
+ * A javascript event bus implementing multiple patterns: 
+ * observable, collector and pipe.
+ * @author Ivan Kuindzhi
+ */
+export default class Observable {
 
+    events: EventsMap = {}
 
     /**
-     * @method createEvent
-     * @param {string} name {
-     *      Event name
-     *      @required
-     * }
-     * @param {object|string|bool} options {
-     *  Options object or returnResult value. All options are optional.
-     * 
-     *  @type {string|bool} returnResult {
-     *   false -- return first 'false' result and stop calling listeners after that<br>
-     *   true -- return first 'true' result and stop calling listeners after that<br>
-     *   "all" -- return all results as array<br>
-     *   "concat" -- merge all results into one array (each result must be array)<br>
-     *   "merge" -- merge all results into one object (each result much be object)<br>
-     *   "pipe" -- pass return value of previous listener to the next listener.
-     *             Only first trigger parameter is being replaced with return value,
-     *             others stay as is.<br>
-     *   "first" -- return result of the first handler (next listener will not be called)<br>
-     *   "nonempty" -- return first nonempty result<br>
-     *   "last" -- return result of the last handler (all listeners will be called)<br>
-     *  }
-     *  @type {bool} autoTrigger {
-     *      once triggered, all future subscribers will be automatically called
-     *      with last trigger params
-     *      @code src-docs/examples/autoTrigger.js
-     * }
-     *  @type {function} triggerFilter {
-     *      This function will be called each time event is triggered. 
-     *      Return false to skip listener.
-     *       @code src-docs/examples/triggerFilter.js
-     *       @param {object} listener This object contains all information about the listener, including
-     *           all data you provided in options while subscribing to the event.
-     *       @param {[]} arguments
-     *       @return {bool}
-     *  }
-     *  @type {object} filterContext triggerFilter's context
-     *  @type {bool} expectPromises {   
-     *      Expect listeners to return Promises. If <code>returnResult</code> is set,
-     *      promises will be treated as return values unless <code>resolvePromises</code>
-     *      is set.
-     *  }
-     *  @type {bool} resolvePromises {
-     *      In pair with <code>expectPromises</code> and <code>returnResult</code>
-     *      this option makes trigger function wait for promises to resolve.
-     *      All or just one depends on returnResult mode. "pipe" mode 
-     *      makes promises resolve consequentially passing resolved value
-     *      to the next promise.
-     *  }
-     * }
-     * @returns {Event}
+     * Use this method only if you need to provide event-level options
+     * @param name Event name
+     * @param options Event options
      */
-     createEvent(name: string, options: EventOptions|string|boolean = {}) {
+    createEvent(name: string, options?: EventOptions): void {
         name = name.toLowerCase();
-        if (!this.events[name]) {
-            this.events[name] = new Event(name, options);
+        const events  = this.events;
+        if (!events[name]) {
+            events[name] = new ObservableEvent(options);
         }
-        return this.events[name];
-    }
-
-
-    /**
-    * @method
-    * @access public
-    * @param {string} name Event name
-    * @return {Event|undefined}
-    */
-    getEvent(name: string):Event|undefined {
-        name = name.toLowerCase();
-        return this.events[name];
-    }
-
-    /**
-    * @method
-    * @access public
-    * @param {string} name Event name
-    * @return {boolean}
-    */
-    hasEvent(name: string):boolean {
-        return !!this.events[name];
     }
 
     /**
     * Subscribe to an event or register collector function.
-    * @method
-    * @access public
-    * @param {string} name {
-    *       Event name. Use '*' to subscribe to all events.
-    *       @required
-    * }
-    * @param {function} fn {
-    *       Callback function
-    *       @required
-    * }
-    * @param {object} options {
+    * @param name Event name. Use '*' to subscribe to all events.
+    * @param fn Callback function
+    * @param options
     *       You can pass any key-value pairs in this object. All of them will be passed 
     *       to triggerFilter (if you're using one).
-    *       @type {bool} first {
-    *           True to prepend to the list of handlers
-    *           @default false
-    *       }
-    *       @type {number} limit {
-    *           Call handler this number of times; 0 for unlimited
-    *           @default 0
-    *       }
-    *       @type {number} start {
-    *           Start calling handler after this number of calls. Starts from 1
-    *           @default 1
-    *       }
-    *       @type {array} append Append parameters
-    *       @type {array} prepend Prepend parameters
-    *       @type {array} replaceArgs Replace parameters
-    *       @type {bool|int} async run event asynchronously. If event was
-    *                      created with <code>expectPromises: true</code>, 
-    *                      this option is ignored.
-    * }
     */
-    on(name:string, fn:Function, options:ListenerOptions = {}) {
+    on(name: string, fn: ListenerFunction, options?: ListenerOptions): void {
         name = name.toLowerCase();
-        if (!this.events[name]) {
-            this.events[name] = new Event(name);
+        const events  = this.events;
+        if (!events[name]) {
+            events[name] = new ObservableEvent();
         }
-        return this.events[name].on(fn, options);
+        events[name].on(fn, options);
     }
 
     /**
-    * @method
-    * @access public
+    * Same as <code>on()</code>, but options.limit is forcefully set to 1.
     */
-    once(name:string, fn:Function, options:ListenerOptions = {}) {
+    once(name: string, fn: ListenerFunction, options?: ListenerOptions): void {
+        options = options || {};
         options.limit = 1;
-        return this.on(name, fn, options);
+        this.on(name, fn, options);
     }
 
     /**
      * Subscribe to an event and return a promise that will be resolved
-     * with event payload
-     * @param {string} name Event name
-     * @return {Promise}
+     * with event payload. 
+     * @param name Event name
+     * @code src-docs/examples/promise.js
      */
-    promise(name:string):Promise<any> {
+    promise(name: string): Promise<any> {
         return new Promise((resolve) => {
             this.once(name, resolve, { limit: 1 });
         });
@@ -154,145 +68,73 @@ class Observable {
 
     /**
     * Unsubscribe from an event
-    * @method
-    * @access public
-    * @param {string} name Event name
-    * @param {function|number} fn Event handler
-    * @param {object} context If you called on() with context you must 
+    * @param name Event name
+    * @param fn Event handler
+    * @param context If you called on() with context you must 
     *                         call un() with the same context
     */
-    un(name:string, fn:Function|number, context?:any):void {
+    un(name: string, fn: ListenerFunction, context?: object) {
         name = name.toLowerCase();
-        if (!this.events[name]) {
+        const events  = this.events;
+        if (!events[name]) {
             return;
         }
-        this.events[name].un(fn, context);
+        events[name].un(fn, context);
     }
-
 
     /**
      * Relay all events of <code>eventSource</code> through this observable.
-     * @method
-     * @access public
+     * @code src-docs/examples/relay.js
      * @param {object} eventSource
      * @param {string} eventName
      * @param {string} triggerName
      * @param {string} triggerNamePfx prefix all relayed event names
      */
-    relayEvent(eventSource:Observable, eventName:string, 
-                triggerName:string|null = null, triggerNamePfx:string|null = null) {
+    relay(eventSource: Observable, eventName: string, 
+                triggerName?: string | null, triggerNamePfx?: string | null) {
         eventSource.on(eventName, this.trigger, {
             context: this,
             prepend: eventName === "*" ? 
-                        null: 
+                        undefined: 
                         // use provided new event name or original name
                         [triggerName || eventName],
-            replace: eventName === "*" && triggerNamePfx ? 
-                            function(args:any[]) {
+            replaceArgs: eventName === "*" && triggerNamePfx ? 
+                            function(l, args) {
                                 args[0] = triggerNamePfx + args[0]
                                 return args;
                             } : 
-                            null
+                            undefined
         });
     }
 
     /**
-     * Stop relaying events of eventSource
-     * @method
-     * @access public
-     * @param {object} eventSource
-     * @param {string} eventName
+     * Stop relaying events of <code>eventSource</code>
+     * @param eventSource
+     * @param eventName
      */
-    unrelayEvent(eventSource: Observable, eventName: string) {
+    unrelay(eventSource: Observable, eventName: string) {
         eventSource.un(eventName, this.trigger, this);
     }
 
     /**
-    * Trigger an event -- call all listeners. Also triggers '*' event.
-    * @method
-    * @access public
-    * @param {string} name Event name { @required }
-    * @param {*} ... As many other params as needed
-    * @return mixed
+    * @param name Event name 
+    * @param fn Callback function 
+    * @param context
+    * @return boolean
     */
-    trigger(name:string, ...args:any[]):any {
-
-        let e:Event;
-        let res:any;
-
-        name = name.toLowerCase();
-
-        if (this.events[name]) {
-            e = this.events[name];
-            res = e.trigger.apply(e, args);
-        }
-
-        // trigger * event with current event name
-        // as first argument
-        if (e = this.events["*"]) {
-            e.trigger.apply(e, [ name, ...args ]);
-        }
-
-        return res;
-    }
-
-    /**
-    * Suspend an event. Suspended event will not call any listeners on trigger().
-    * @method
-    * @access public
-    * @param {string} name Event name
-    */
-    suspendEvent(name:string):void {
-        name = name.toLowerCase();
-        if (!this.events[name]) {
-            return;
-        }
-        this.events[name].suspend();
-    }
-
-
-    /**
-    * @method
-    * @access public
-    */
-    suspendAllEvents():void {
-        Object.keys(this.events).forEach((key:string) => this.events[key].suspend());
-    }
-
-    /**
-    * Resume suspended event.
-    * @method
-    * @access public
-    * @param {string} name Event name
-    */
-    resumeEvent(name:string):void {
-        name = name.toLowerCase();
-        if (!this.events[name]) {
-            return;
-        }
-        this.events[name].resume();
-    }
-
-    /**
-    * @method
-    * @access public
-    */
-    resumeAllEvents():void {
-        Object.keys(this.events).forEach((key:string) => this.events[key].resume());
-    }
-
-    /**
-     * @method
-     * @access public
-     */
-    hasListener(name?:string, fn:Function|number|null = null, context:any = null):boolean {
+    hasListener(name?: string, fn?: ListenerFunction, context?: object) {
+        const events = this.events;
 
         if (name) {
-            return this.getEvent(name)?.hasListener(fn, context) || false;
+            name = name.toLowerCase();
+            if (!events[name]) {
+                return false;
+            }
+            return events[name].hasListener(fn, context);
         }
         else {
-            for (name in this.events) {
-                if (this.events[name].hasListener()) {
+            for (name in events) {
+                if (events[name].hasListener()) {
                     return true;
                 }
             }
@@ -301,26 +143,281 @@ class Observable {
     }
 
     /**
-     * @method
-     * @access public
-     * @param {string} name 
+    * @param name Event name
+    * @return boolean
+    */
+    hasEvent(name: string) {
+        return !!this.events[name];
+    }
+
+
+    /**
+    * Remove all listeners from specific event or from all events
+    * @param name Event name
+    */
+    removeAllListeners(name: string) {
+        const events  = this.events;
+        if (name) {
+            if (!events[name]) {
+                return;
+            }
+            events[name].removeAllListeners();
+        }
+        else {
+            for (name in events) {
+                events[name].removeAllListeners();
+            }
+        }
+    }
+
+
+
+    /**
+     * Trigger event and return all results from the listeners
+     * @param name Event name
+     * @param [...args]
      */
-    removeAllListeners(name:string):void {
-        this.getEvent(name)?.removeAllListeners();
+    all(name: string, ...args: any[]): any[] | Promise<any[]> {
+        return this._trigger(name, args, ReturnType.ALL);
     }
 
     /**
-     * @method
-     * @access public
-     * @param {string} name Event name
+     * Trigger event and return a promise with results from the listeners
+     * @param name Event name
+     * @param [...args]
      */
-    destroyEvent(name:string):void {
+    resolveAll(name: string, ...args: any[]): Promise<any[]> {
+        return this._trigger(name, args, ReturnType.ALL, true);
+    }
+
+    /**
+     * Trigger first event's listener and return its result
+     * @param name Event name
+     * @param [...args]
+     */
+    first(name: string, ...args: any[]): any | Promise<any> {
+        return this._trigger(name, args, ReturnType.FIRST);
+    }
+
+    /**
+     * Trigger first event's listener and return its result as a promise
+     * @param name Event name
+     * @param [...args]
+     */
+    resolveFirst(name: string, ...args: any[]): Promise<any> {
+        return this._trigger(name, args, ReturnType.FIRST, true);
+    }
+
+    /**
+     * Trigger event and return last listener's result
+     * @param name Event name
+     * @param [...args]
+     */
+    last(name: string, ...args: any[]): any | Promise<any> {
+        return this._trigger(name, args, ReturnType.LAST);
+    }
+
+    /**
+     * Trigger event and return last listener's result as a promise
+     * @param name Event name
+     * @param [...args]
+     */
+    resolveLast(name: string, ...args: any[]): Promise<any> {
+        return this._trigger(name, args, ReturnType.LAST, true);
+    }
+
+    /**
+     * Trigger event and return all results from the listeners merged into one object
+     * @param name Event name
+     * @param [...args]
+     */
+    merge(name: string, ...args: any[]): object | Promise<object> {
+        return this._trigger(name, args, ReturnType.MERGE);
+    }
+
+    /**
+     * Trigger event and return as a promise all results from the listeners merged into one object
+     * @param name Event name
+     * @param [...args]
+     */
+    resolveMerge(name: string, ...args: any[]): Promise<object> {
+        return this._trigger(name, args, ReturnType.MERGE, true);
+    }
+
+
+    /**
+     * Trigger event and return all results from the listeners flattened into one array
+     * @param name Event name
+     * @param [...args]
+     */
+    concat(name: string, ...args: any[]): any[] | Promise<any[]> {
+        return this._trigger(name, args, ReturnType.CONCAT);
+    }
+
+    /**
+     * Trigger event and return as a promise all results from the listeners flattened into one array
+     * @param name Event name
+     * @param [...args]
+     */
+    resolveConcat(name: string, ...args: any[]): Promise<any[]> {
+        return this._trigger(name, args, ReturnType.CONCAT, true);
+    }
+
+    /**
+     * Trigger event and return first non-empty listener result and skip others
+     * @param name Event name
+     * @param [...args]
+     */
+    firstNonEmpty(name: string, ...args: any[]): any | Promise<any> {
+        return this._trigger(name, args, ReturnType.FIRST_NON_EMPTY);
+    }
+
+    /**
+     * Trigger event and return as a promise first non-empty listener result and skip others
+     * @param name Event name
+     * @param [...args]
+     */
+    resolveFirstNonEmpty(name: string, ...args: any[]): Promise<any> {
+        return this._trigger(name, args, ReturnType.FIRST_NON_EMPTY, true);
+    }
+
+    /**
+     * Trigger event and return first listener result that equals true and skip others
+     * @param name Event name
+     * @param [...args]
+     */
+    untilTrue(name: string, ...args: any[]): void | Promise<void> {
+        return this._trigger(name, args, ReturnType.FIRST_TRUE);
+    }
+
+    /**
+     * Trigger event and return first listener result that equals false and skip others
+     * @param name Event name
+     * @param [...args]
+     */
+    untilFalse(name: string, ...args: any[]): void | Promise<void> {
+        return this._trigger(name, args, ReturnType.FIRST_FALSE);
+    }
+
+    /**
+     * Trigger event and pass previous listener's return value into next listener and return last result
+     * @param name Event name
+     * @param [...args]
+     */
+    pipe(name: string, ...args: any[]): any | Promise<any> {
+        return this._trigger(name, args, ReturnType.PIPE);
+    }
+
+    /**
+     * Trigger event and pass previous listener's return value into next listener and return 
+     * last result as promise
+     * @param name Event name
+     * @param [...args]
+     */
+    resolvePipe(name: string, ...args: any[]): Promise<any> {
+        return this._trigger(name, args, ReturnType.PIPE, true);
+    }
+
+    /**
+     * Trigger event and return all results as is
+     * @param name Event name
+     * @param [...args]
+     */
+    raw(name: string, ...args: any[]): any[] | Promise<any>[] {
+        return this._trigger(name, args, ReturnType.RAW);
+    }
+
+    /**
+     * Trigger all listeners of the event, do not return anything
+     * @param name 
+     * @param [...args]
+     */
+    trigger(name: string, ...args: any[]): void | Promise<void> {
+        return this._trigger(name, args);
+    }
+
+    _trigger(name: string, args: any[], returnType: ReturnType | null = null, resolve: boolean = false): ReturnValue {
+
+        const events = this.events;
+        let e: ObservableEvent;
+
+        name = name.toLowerCase();
+
+        if (events[name]) {
+            e = events[name];
+            return resolve ? e.resolve(args, returnType) : e.trigger(args, returnType);
+        }
+
+        // trigger * event with current event name
+        // as first argument
+        if (e = events["*"]) {
+            e.trigger([ name, ...args ], returnType);
+        }
+    }
+
+    /**
+    * Suspend an event. Suspended event will not call any listeners on trigger().
+    * @param name Event name
+    */
+    suspendEvent(name: string) {
+        name = name.toLowerCase();
+        const events  = this.events;
+        if (!events[name]) {
+            return;
+        }
+        events[name].suspend();
+    }
+
+    suspendAllEvents() {
+        const events  = this.events;
+        for (const name in events) {
+            events[name].suspend();
+        }
+    }
+
+    /**
+    * Resume suspended event.
+    * @param name Event name
+    */
+    resumeEvent(name: string) {
+        name = name.toLowerCase();
+        if (!this.events[name]) {
+            return;
+        }
+        this.events[name].resume();
+    }
+
+    resumeAllEvents() {
+        const events  = this.events;
+        for (const name in events) {
+            events[name].resume();
+        }
+    }
+
+    /**
+     * @param name Event name
+     */
+    destroyEvent(name: string) {
+        name = name.toLowerCase();
         const events  = this.events;
         if (events[name]) {
             events[name].removeAllListeners();
+            events[name].$destroy();
             delete events[name];
         }
     }
-}
 
-export default Observable
+
+    /**
+    * Destroy observable
+    */
+    $destroy() {
+        const events = this.events;
+
+        for (const name in events) {
+            this.destroyEvent(name);
+        }
+
+        this.events = {};
+    }
+};

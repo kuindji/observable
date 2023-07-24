@@ -1,36 +1,62 @@
 # Observable
 A javascript event system implementing multiple patterns: observable, collector and pipe.
 
-Observable:
+
+
+### Observable:
 ```javascript
 const Observable = require("@kuindji/observable");
 const o = new Observable;
-o.on("event", (x, y, z) => console.log(x, y, z));
-o.trigger("event", 1, 2, 3); // prints 1, 2, 3
+o.on("event", (x, y, z) => console.log([x, y, z]));
+o.trigger("event", 1, 2, 3); // [1, 2, 3]
+// other methods:
+o.untilTrue()
+o.untilFalse()
 ```
 
-Collector:
+### Collector:
 ```javascript
 const Observable = require("@kuindji/observable");
 const o = new Observable;
-o.createEvent("collectStuff", "all");
 o.on("collectStuff", () => 1);
 o.on("collectStuff", () => 2);
-const results = o.trigger("collectStuff"); // [1, 2]
+const results = o.all("collectStuff"); // [1, 2]
 ```
-
-Pipe:
 ```javascript
 const Observable = require("@kuindji/observable");
 const o = new Observable;
-o.createEvent("some-job", "pipe");
-o.on("some-job", (value) => value + value);
-o.on("some-job", (value) => value * value);
-
-const result = o.trigger("some-job", 1); // 4
+o.on("collectStuff", () => Promise.resolve(1));
+o.on("collectStuff", () => Promise.resolve(2));
+o.on("collectStuff", () => 3);
+const results = await o.resolveAll("collectStuff"); // [1, 2, 3]
+```
+Other collector methods:
+```
+o.first()
+o.last()
+o.firstNonEmpty()
+o.concat()
+o.merge()
+o.raw()
 ```
 
-Autotrigger:
+### Pipe:
+```javascript
+const Observable = require("@kuindji/observable");
+const o = new Observable;
+o.on("some-job", (value) => value + value);
+o.on("some-job", (value) => value * value);
+const result = o.pipe("some-job", 1); // 4
+```
+```javascript
+const Observable = require("@kuindji/observable");
+const o = new Observable;
+o.on("some-job", (value) => Promise.resolve(value + value));
+o.on("some-job", (value) => Promise.resolve(value * value));
+const result = await o.resolvePipe("some-job", 1); // 4
+```
+
+### Autotrigger:
 ```javascript
 const o = new Observable;
 o.createEvent("auto", { autoTrigger: true });
@@ -40,7 +66,7 @@ o.trigger("auto", 1, 2);
 o.on("auto", (a, b) => console.log(a, b)); // immediately logs 1, 2
 ```
 
-Promise:
+### Promise:
 ```javascript
 const o = new Observable;
 o.promise("event").then(payload => console.log(payload));
@@ -48,7 +74,7 @@ o.trigger("event", { data: "hello world" });
 ```
 
 
-Relay:
+### Relay:
 ```javascript
 const o1 = new Observable;
 const o2 = new Observable;
@@ -62,15 +88,15 @@ o2.on("local-name", () => console.log("OK!"));
 o1.trigger("another-event"); // OK!
 ```
 
-Filter:
+### Filter:
 ```javascript 
 const o = new Observable;
 o.createEvent("filtered", {
-    triggerFilter: (l, args) => {
-        if (l.userData?.always) {
+    filter: (args, l) => {
+        if (l.extraData?.always) {
             return true;
         }
-        if (l.userData?.param === args[0]) {
+        if (l.extraData?.param === args[0]) {
             return true;
         }
         return false;
@@ -78,18 +104,18 @@ o.createEvent("filtered", {
 });
 
 o.on("filtered", () => console.log("always"), {
-    userData: { always: true }
+    extraData: { always: true }
 });
 
 o.on("filtered", () => console.log("param"), {
-    userData: { param: 1 }
+    extraData: { param: 1 }
 });
 
 o.trigger("filtered", 2); // "always"
 o.trigger("filtered", 1); // "always", "param"
 ```
 
-Any event:
+### Any event:
 ```javascript
 const o = new Observable;
 o.on("*", (eventName, x, y) => console.log(eventName, x, y));
@@ -98,72 +124,8 @@ o.trigger("event2", 3, 4); // prints event2 3 4
 ```
 
 
-API:
+### API:
 ```javascript
-/*
- * Create event
- * Events don't have to be "created" in order to be triggered.
- * Use this api to specify event's behaviour. 
- */
-o.createEvent(
-    /* required */ "eventName", 
-    /* optional */ {
-
-        /*  null -- default; do not return results
-        *   false -- return first 'false' result and stop calling listeners after that
-        *   true -- return first 'true' result and stop calling listeners after that
-        *   "all" -- return all results as array
-        *   "concat" -- merge all results into one array (each result must be array)
-        *   "merge" -- merge all results into one object (each result much be object)
-        *   "pipe" -- pass return value of previous listener to the next listener.
-        *             Only first trigger parameter is being replaced with return value,
-        *             others stay as is.
-        *   "first" -- return result of the first handler (next listener will not be called)
-        *   "nonempty" -- return first nonempty result
-        *   "last" -- return result of the last handler (all listeners will be called)
-        */
-        "returnResult": string | boolean | null,
-
-        /*
-         * once triggered, all future subscribers will be automatically called
-         * with last trigger params
-         */
-        "autoTrigger": boolean,
-
-        /*
-         * This function will be called each time event is triggered. 
-         * Return false to skip listener.
-         */
-        "triggerFilter": function(listener, args) {},
-
-        /*
-         * "this" context to call triggerFilter in
-         */
-        "filterContext": any,
-
-        /*
-         * Expect listeners to return Promises. If returnResult is set,
-         * promises will be treated as return values unless resolvePromises
-         * is set.
-         */
-        "expectPromises": boolean,
-
-        /*
-         * In pair with expectPromises and returnResult
-         * this option makes trigger function wait for promises to resolve.
-         * All or just one depends on returnResult mode. "pipe" mode 
-         * makes promises resolve consequentially passing resolved value
-         * to the next promise.
-         */
-        "resolvePromises" boolean
-    }
-);
-
-/*
- * If second parameter is not an object it resolves into { returnResult: <value> }
- */
-o.createEvent("eventName", "all");
-
 // Subscribe to event
 // Returns listener id which can be used in un()
 o.on(
@@ -177,6 +139,17 @@ o.on(
         // "this" object to call listener with
         "context": null,
 
+        /*
+         * This function will be called each time event is triggered. 
+         * Return false to skip listener.
+         */
+        "filter": function(args, listener?) {},
+
+        /*
+         * "this" context to call triggerFilter in
+         */
+        "filterContext": any,
+
         // prepend to the list of listeners
         "first": false,
 
@@ -187,13 +160,13 @@ o.on(
         "start": 0,
 
         // append these arguments when calling the listener
-        "append": array | (args, userData) => [],
+        "append": array | (listener, args) => [],
 
         // prepend these arguments when calling the listener
-        "prepend": array | (args, userData) => [],
+        "prepend": array | (listener, args) => [],
 
         // replace with these arguments when calling the listener
-        "replace": array | (args, userData) => [],
+        "replace": array | (listener, args) => [],
 
         // Run event asynchronously. 
         // If event was created with expectPromises: true this option is ignored
@@ -211,18 +184,38 @@ o.once(
 );
 
 // Trigger an event
-o.trigger(
-    /* required */ "eventName",
-    /* optional */ ...args
-);
+o.trigger(/* required */ "eventName", /* optional */ ...args);
+o.untilTrue(/* required */ "eventName", /* optional */ ...args);
+o.untilFalse(/* required */ "eventName", /* optional */ ...args);
+
+// Collect data (these may return promise or value depending on what listener returns)
+const arr = o.raw(/* required */ "eventName", /* optional */ ...args);
+const arr = o.all(/* required */ "eventName", /* optional */ ...args);
+const obj = o.merge(/* required */ "eventName", /* optional */ ...args);
+const arr = o.concat(/* required */ "eventName", /* optional */ ...args);
+const value = o.firstNonEmpty(/* required */ "eventName", /* optional */ ...args);
+const value = o.first(/* required */ "eventName", /* optional */ ...args);
+const value = o.last(/* required */ "eventName", /* optional */ ...args);
+
+// Collect async data (these will always return Promise)
+const all = await o.resolveAll(/* required */ "eventName", /* optional */ ...args);
+const obj = await o.resolveMerge(/* required */ "eventName", /* optional */ ...args);
+const arr = await o.resolveConcat(/* required */ "eventName", /* optional */ ...args);
+const value = await o.resolveFirstNonEmpty(/* required */ "eventName", /* optional */ ...args);
+const value = await o.resolveFirst(/* required */ "eventName", /* optional */ ...args);
+
+// Collect pipe data (may return promise or value depending on what listener returns)
+const value = o.pipe(/* required */ "eventName", /* optional */ arg);
+// Collect async pipe data (will always return Promise)
+const value = await o.resolvePipe(/* required */ "eventName", /* optional */ arg);
 
 // Subscribe to an event and get a promise that will be resolved with event payload 
-o.promise("eventName");
+await o.promise("eventName");
 
 // Unsubscribe from event
 o.un(
     /* required */ "eventName",
-    /* required */ () => {} | number,
+    /* required */ () => {},
     /* optional */ context
 );
 
@@ -258,6 +251,66 @@ o.hasListener(
 
 // Remove all listeners from event
 o.removeAllListeners("eventName");
+
+
+/*
+ * Event context 
+ */
+class A = {
+    handler() {}
+}
+const a = new A;
+const b = new A;
+// you can do this instead of a.handler.bind(a)
+o.on("event", a.handler, { context: a });
+o.on("event", b.handler, { context: b });
+
+
+/*
+ * Create event
+ * Events don't have to be "created" in order to be triggered.
+ * Use this api to specify event's behaviour. 
+ */
+o.createEvent(
+    /* required */ "eventName", 
+    /* optional */ {
+        /*
+         * once triggered, all future subscribers will be automatically called
+         * with last trigger params
+         */
+        "autoTrigger": boolean,
+
+        /*
+         * This function will be called each time event is triggered. 
+         * Return false to skip listener.
+         */
+        "filter": function(args, listener?) {},
+
+        /*
+         * "this" context to call triggerFilter in
+         */
+        "filterContext": any,
+        /**
+         * Append parameters
+         */
+        "append": array | (listener, args) => [],
+        /**
+         * Prepend parameters
+         */
+        "prepend": array | (listener, args) => [],
+        /**
+         * Replace parameters
+         */
+        "replaceArgs": array | (listener, args) => [],
+        /**
+         * Call this listener asynchronously. If event was
+         *  created with <code>expectPromises: true</code>, 
+         *  this option is ignored. Milliseconds or true|false
+         */
+        "async": boolean | number,
+    }
+);
+
 // Remove all event listeners and reset options
 o.destroyEvent("eventName");
 ```

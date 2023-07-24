@@ -1,7 +1,21 @@
 
+export default function async(
+    fn: (...args: any[]) => any, 
+    context?: object, 
+    args?: any[], 
+    timeout?: number): Promise<any> {
 
-function async(fn:Function, context:any = null, args:any[] = [], timeout:number = 0) {
-    return setTimeout(() => fn.apply(context, args), timeout);
-};
-
-export default async
+    return new Promise((resolve, reject) => {
+        setTimeout(
+            () => {
+                try {
+                    resolve(fn.apply(context, args || []))
+                }
+                catch (err) {
+                    reject(err)
+                };
+            }, 
+            timeout || 0
+        );
+    });
+}
