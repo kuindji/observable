@@ -171,9 +171,8 @@ o.on(
         "replace": array | (listener, args) => [],
 
         // Run event asynchronously. 
-        // If event was created with expectPromises: true this option is ignored
         // number = number of milliseconds
-        // true = 1ms
+        // true = 0ms
         "async" boolean | number
     }
 );
@@ -305,9 +304,7 @@ o.createEvent(
          */
         "replaceArgs": array | (listener, args) => [],
         /**
-         * Call this listener asynchronously. If event was
-         *  created with <code>expectPromises: true</code>, 
-         *  this option is ignored. Milliseconds or true|false
+         * Call this listener asynchronously. Milliseconds or true|false
          */
         "async": boolean | number,
     }
