@@ -1,5 +1,5 @@
 import { assert } from "chai"
-import Observable from "../src/index"
+import Observable from "../dist/index"
 import util from "./util"
 
 type Opt = {

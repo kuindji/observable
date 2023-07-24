@@ -1,5 +1,5 @@
 import { assert } from "chai"
-import Observable, { Listener } from "../src/index"
+import Observable, { Listener } from "../dist/index"
 
 
 describe("Filter", () => {

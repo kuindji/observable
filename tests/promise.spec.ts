@@ -1,5 +1,5 @@
 import { assert } from "chai"
-import Observable from "../src/index"
+import Observable from "../dist/index"
 
 describe("Observable", () => {
     it("should make a promise out of an event", (done) => {
