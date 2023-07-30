@@ -155,7 +155,13 @@ o.on(
         // prepend to the list of listeners
         "first": false,
 
-        // limit the number triggers for this listener (0 - no limit)
+        // always call this listener before others
+        "alwaysFirst": false,
+
+        // always call this listener after others
+        "alwaysLast": false,
+
+        // limit the number of triggers for this listener (0 - no limit)
         "limit": 0,
 
         // start triggering listener after given number of triggers
@@ -168,7 +174,7 @@ o.on(
         "prepend": array | (listener, args) => [],
 
         // replace with these arguments when calling the listener
-        "replace": array | (listener, args) => [],
+        "replaceArgs": array | (listener, args) => [],
 
         // Run event asynchronously. 
         // number = number of milliseconds

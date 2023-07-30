@@ -36,11 +36,11 @@ type BaseEventOptions = {
     /**
      * Append parameters
      */
-    append?: ArgumetsTransformer,
+    appendArgs?: ArgumetsTransformer,
     /**
      * Prepend parameters
      */
-    prepend?: ArgumetsTransformer,
+    prependArgs?: ArgumetsTransformer,
     /**
      * Replace parameters
      */

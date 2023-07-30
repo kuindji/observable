@@ -24,8 +24,8 @@ export default class ObservableEvent {
     autoTrigger: boolean | null = null
     filter: TriggerFilter | null = null
     filterContext: object | null = null
-    append: ArgumetsTransformer | null = null
-    prepend: ArgumetsTransformer | null = null
+    appendArgs: ArgumetsTransformer | null = null
+    prependArgs: ArgumetsTransformer | null = null
     replaceArgs: ArgumetsTransformer | null = null
 
     constructor(options?: EventOptions) {
@@ -158,8 +158,8 @@ export default class ObservableEvent {
     prepareArgs(l: Listener, triggerArgs: any[]): any[] {
 
         let args: any[] = triggerArgs;
-        const append: ArgumetsTransformer | null = l.append || this.append || null, 
-            prepend: ArgumetsTransformer | null = l.prepend || this.prepend || null, 
+        const append: ArgumetsTransformer | null = l.appendArgs || this.appendArgs || null, 
+            prepend: ArgumetsTransformer | null = l.prependArgs || this.prependArgs || null, 
             repl: ArgumetsTransformer | null = l.replaceArgs || this.replaceArgs || null;
     
         if (append || prepend) {    

@@ -16,8 +16,8 @@ describe("Observable", () => {
 
         const appended = [], prepended = [];
 
-        o.on("event", l(appended), { append: [1,2] });
-        o.on("event", l(prepended), { prepend: [3,4] });
+        o.on("event", l(appended), { appendArgs: [1,2] });
+        o.on("event", l(prepended), { prependArgs: [3,4] });
 
         o.trigger("event", "!");
 
@@ -30,8 +30,8 @@ describe("Observable", () => {
         const o = new Observable;
 
         o.createEvent("event", {
-            prepend: [1,2],
-            append: [3,4]
+            prependArgs: [1,2],
+            appendArgs: [3,4]
         })
 
         const l = (saveIn) => {

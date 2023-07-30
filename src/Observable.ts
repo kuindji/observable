@@ -94,7 +94,7 @@ export default class Observable {
                 triggerName?: string | null, triggerNamePfx?: string | null) {
         eventSource.on(eventName, this.trigger, {
             context: this,
-            prepend: eventName === "*" ? 
+            prependArgs: eventName === "*" ? 
                         undefined: 
                         // use provided new event name or original name
                         [triggerName || eventName],
