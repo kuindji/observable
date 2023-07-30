@@ -231,5 +231,14 @@ describe("Observable", () => {
 
         assert.strictEqual(5, res, "handlers should've been called 5 times");
     });
+
+    it("wait for first trigger", (done) => {
+        const o = new Observable;
+        o.promise("event").then((payload) => {
+            assert(payload === 1);
+            done();
+        });
+        setTimeout(() => o.trigger("event", 1), 50);
+    });
 });
 

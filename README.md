@@ -216,7 +216,7 @@ const value = o.pipe(/* required */ "eventName", /* optional */ arg);
 // Collect async pipe data (will always return Promise)
 const value = await o.resolvePipe(/* required */ "eventName", /* optional */ arg);
 
-// Subscribe to an event and get a promise that will be resolved with event payload 
+// Get a promise for the next trigger and receive event's payload
 await o.promise("eventName");
 
 // Unsubscribe from event

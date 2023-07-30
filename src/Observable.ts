@@ -32,8 +32,7 @@ export default class Observable {
     * Subscribe to an event or register collector function.
     * @param name Event name. Use '*' to subscribe to all events.
     * @param fn Callback function
-    * @param options
-    *       You can pass any key-value pairs in this object. All of them will be passed 
+    * @param options You can pass any key-value pairs in this object. All of them will be passed 
     *       to triggerFilter (if you're using one).
     */
     on(name: string, fn: ListenerFunction, options?: ListenerOptions): void {
@@ -47,6 +46,9 @@ export default class Observable {
 
     /**
     * Same as <code>on()</code>, but options.limit is forcefully set to 1.
+    * @param name Event name
+    * @param fn Listener
+    * @param options? listener options
     */
     once(name: string, fn: ListenerFunction, options?: ListenerOptions): void {
         options = options || {};
@@ -55,14 +57,13 @@ export default class Observable {
     }
 
     /**
-     * Subscribe to an event and return a promise that will be resolved
-     * with event payload. 
+     * Same as <code>once()</code> but as Promise with event payload as resolved value
      * @param name Event name
-     * @code src-docs/examples/promise.js
+     * @param options?
      */
-    promise(name: string): Promise<any> {
+    promise(name: string, options?: ListenerOptions): Promise<any> {
         return new Promise((resolve) => {
-            this.once(name, resolve, { limit: 1 });
+            this.once(name, resolve, options);
         });
     }
 
@@ -84,7 +85,6 @@ export default class Observable {
 
     /**
      * Relay all events of <code>eventSource</code> through this observable.
-     * @code src-docs/examples/relay.js
      * @param {object} eventSource
      * @param {string} eventName
      * @param {string} triggerName
