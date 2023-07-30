@@ -1,5 +1,6 @@
 import async from "./lib/async"
 import isPromise from "./lib/isPromise"
+import listenerSorter from "./lib/listenerSorter"
 import { ReturnType } from "./types"
 import { ListenerFunction, ListenerOptions, 
         Listener, TriggerFilter, ReturnValue,
@@ -16,6 +17,7 @@ export default class ObservableEvent {
     suspended: boolean = false
     triggered: number = 0
     lastTrigger: any[] | null = null
+    sortListeners: boolean = false
 
     async: boolean | number = false
     limit: number = 0
@@ -65,6 +67,7 @@ export default class ObservableEvent {
             limit:      0, // how many times the function is allowed to trigger
             start:      1, // from which attempt it is allowed to trigger the function
             count:      0, // how many attempts to trigger the function was made
+            index:      0
         };
 
         Object.assign(listener, options);
@@ -72,11 +75,24 @@ export default class ObservableEvent {
         if (listener.async === true) {
             listener.async = 1;
         }
-        if (options.first === true) {
+        if (options.first === true || options.alwaysFirst === true) {
             listeners.unshift(listener);
         }
         else {
             listeners.push(listener);
+        }
+
+        if (this.sortListeners) {
+            this.listeners = listeners
+                                .map((l: Listener, inx: number): Listener => {
+                                    l.index = inx;
+                                    return l;
+                                })
+                                .sort(listenerSorter);
+        }
+
+        if (options.alwaysFirst === true || options.alwaysLast === true) {
+            this.sortListeners = true;
         }
 
         if (this.autoTrigger && this.lastTrigger && !this.suspended) {

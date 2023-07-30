@@ -79,6 +79,16 @@ export type ListenerOptions = BaseEventOptions & {
      */
     first?: boolean,
     /**
+     * True to always run this listener before others
+     * @default false
+     */
+    alwaysFirst?: boolean,
+    /**
+     * True to always run this listener after others
+     * @default false
+     */
+    alwaysLast?: boolean,
+    /**
      * Call handler this number of times; 0 for unlimited
      * @default 0
      */
@@ -102,5 +112,6 @@ export type ListenerOptions = BaseEventOptions & {
 export type Listener = ListenerOptions & {
     fn: ListenerFunction,
     called: number,
-    count: number
+    count: number,
+    index: number
 }

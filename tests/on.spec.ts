@@ -2,13 +2,13 @@ import { assert } from "chai"
 import Observable from "../dist/index"
 import util from "./util"
 
-describe("Observable", function(){
+describe("Observable", () => {
 
-    it("should respect listener's append and prepend arguments", function(){
+    it("should respect listener's append and prepend arguments", () => {
 
         const o = new Observable;
 
-        const l = function(saveIn) {
+        const l = (saveIn) => {
             return (...args) => {
                 args.forEach(arg => saveIn.push(arg));
             };
@@ -25,7 +25,7 @@ describe("Observable", function(){
         assert.deepStrictEqual(["!", 1, 2], appended);
     });
 
-    it("should respect event's append and prepend arguments", function(){
+    it("should respect event's append and prepend arguments", () => {
 
         const o = new Observable;
 
@@ -34,7 +34,7 @@ describe("Observable", function(){
             append: [3,4]
         })
 
-        const l = function(saveIn) {
+        const l = (saveIn) => {
             return (...args) => {
                 args.forEach(arg => saveIn.push(arg));
             };
@@ -48,11 +48,11 @@ describe("Observable", function(){
         assert.deepStrictEqual([1,2, "!", 3, 4], args);
     });
 
-    it("should respect listener's replaceArgs argument", function(){
+    it("should respect listener's replaceArgs argument", () => {
 
         const o = new Observable;
 
-        const l = function(saveIn) {
+        const l = (saveIn) => {
             return (...args) => {
                 args.forEach(arg => saveIn.push(arg));
             };
@@ -66,7 +66,7 @@ describe("Observable", function(){
         assert.deepStrictEqual([1, 2], args);
     });
 
-    it("should respect listener's first option", function(){
+    it("should respect listener's first option", () => {
 
         const o = new Observable;
         const triggered = [];
@@ -79,14 +79,42 @@ describe("Observable", function(){
         assert.deepStrictEqual([2, 1], triggered);
     });
 
-    it("should respect event's replaceArgs argument", function(){
+    it("should respect listener's alwaysFirst option", () => {
+
+        const o = new Observable;
+        const triggered = [];
+        const l = util.listenerFactory("log-id", triggered);
+
+        o.on("event", l(1));
+        o.on("event", l(2), { alwaysFirst: true });
+        o.on("event", l(3), { first: true });
+        o.trigger("event");
+
+        assert.deepStrictEqual([2, 3, 1], triggered);
+    });
+
+    it("should respect listener's alwaysLast option", () => {
+
+        const o = new Observable;
+        const triggered = [];
+        const l = util.listenerFactory("log-id", triggered);
+
+        o.on("event", l(1));
+        o.on("event", l(2), { alwaysLast: true });
+        o.on("event", l(3));
+        o.trigger("event");
+
+        assert.deepStrictEqual([1, 3, 2], triggered);
+    });
+
+    it("should respect event's replaceArgs argument", () => {
 
         const o = new Observable;
 
         o.createEvent("event", {
             replaceArgs: [1, 2]
         })
-        const l = function(saveIn) {
+        const l = (saveIn) => {
             return (...args) => {
                 args.forEach(arg => saveIn.push(arg));
             };
@@ -100,7 +128,7 @@ describe("Observable", function(){
         assert.deepStrictEqual([1, 2], args);
     });
 
-    it("should respect start and limit options", function(){
+    it("should respect start and limit options", () => {
 
         const o = new Observable;
         const triggered = [];
@@ -117,7 +145,7 @@ describe("Observable", function(){
         assert.deepStrictEqual([1,1,2,2], triggered);
     });
 
-    it("should respect event's limit option", function(){
+    it("should respect event's limit option", () => {
 
         const o = new Observable;
         o.createEvent("event", {
@@ -136,14 +164,14 @@ describe("Observable", function(){
         assert.deepStrictEqual([1,1], triggered);
     });
 
-    it("should respect given context and control dupes", function(){
+    it("should respect given context and control dupes", () => {
         
         const o = new Observable;
         const triggered: any[] = [];
         const context = {
             a: 1,
             b: 2,
-            l: function(){
+            l: function() {
                 triggered.push(this.a);
             },
             d: function() {
@@ -160,19 +188,17 @@ describe("Observable", function(){
         assert.deepStrictEqual([1, 2], triggered);
     });
 
-    it("should run listeners asynchronously when asked", function(done){
+    it("should run listeners asynchronously when asked", (done) => {
         const o = new Observable;
         o.on("event", done, {async: 100});
         o.trigger("event");
     });
 
-    it("should unsubscribe from event", function() {
+    it("should unsubscribe from event", () => {
 
         const o = new Observable;
         const triggered: number[] = [];
-        const l = function(){
-            triggered.push(1);
-        };
+        const l = () => triggered.push(1);
         o.on("event", l);
         o.trigger("event");
         o.un("event", l);
@@ -181,7 +207,7 @@ describe("Observable", function(){
         assert.deepStrictEqual([1], triggered);
     });
 
-    it("should unsubscribe dupes correctly", function() {
+    it("should unsubscribe dupes correctly", () => {
 
         let res = 0;
         const SomeClass = class {
