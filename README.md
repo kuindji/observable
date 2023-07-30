@@ -168,10 +168,10 @@ o.on(
         "start": 0,
 
         // append these arguments when calling the listener
-        "append": array | (listener, args) => [],
+        "appendArgs": array | (listener, args) => [],
 
         // prepend these arguments when calling the listener
-        "prepend": array | (listener, args) => [],
+        "prependArgs": array | (listener, args) => [],
 
         // replace with these arguments when calling the listener
         "replaceArgs": array | (listener, args) => [],
@@ -179,7 +179,7 @@ o.on(
         // Run event asynchronously. 
         // number = number of milliseconds
         // true = 0ms
-        "async" boolean | number
+        "async": boolean | number
     }
 );
 
