@@ -90,10 +90,22 @@ o1.trigger("another-event"); // OK!
 o2.unrelay(o1, "some-event");
 
 const o = new Observable;
-const ee = new EventEmitter();
-ee.on("source-event", o.getProxy("target-event"));
+const eventEmitter = new EventEmitter();
+// simple proxy for one specific event
+eventEmitter.on("source-event", o.proxy("target-event"));
 o.on("target-event", () => console.log("ok"));
-ee.emit("source-event"); // ok
+eventEmitter.emit("source-event"); // ok
+
+// full proxy to another event bus
+o.addEventSource({
+    name: "EventEmitter",
+    on: (eventName, listener) => eventEmitter.on(eventName.replace("emitter-"), listener),
+    un: (eventName, listener) => eventEmitter.off(eventName.replace("emitter-"), listener),
+    accepts: (eventName) => eventName.indexOf("emitter-") === 0
+});
+o.on("emitter-event", () => console.log("triggered from EventEmitter"));
+eventEmitter.emit("event"); // triggered from EventEmitter
+
 ```
 
 ### Filter:
@@ -139,7 +151,9 @@ o.trigger("event2", 3, 4); // prints event2 3 4
 o.on(
     /* There is a special event name "*" 
      * Listeners of this event will be triggered on any event
-     * as receive event name as the first argument
+     * as receive event name as the first argument.
+     * 
+     * Event names are case sensitive
      */
     /* required */ "eventName",
     /* required */ () => {},
@@ -198,16 +212,25 @@ o.once(
 
 // Trigger an event
 o.trigger(/* required */ "eventName", /* optional */ ...args);
+// Call listeners until one of them returns true
 o.untilTrue(/* required */ "eventName", /* optional */ ...args);
+// Call listeners until one of them returns false
 o.untilFalse(/* required */ "eventName", /* optional */ ...args);
 
 // Collect data (these may return promise or value depending on what listener returns)
+// return raw results from all listeners
 const arr = o.raw(/* required */ "eventName", /* optional */ ...args);
+// return all results as array and try to resolve promises, if any
 const arr = o.all(/* required */ "eventName", /* optional */ ...args);
+// merge results from all listeners into one object and try to resolve responses
 const obj = o.merge(/* required */ "eventName", /* optional */ ...args);
+// merge results from all listeners into one flat array and try to resolve responses
 const arr = o.concat(/* required */ "eventName", /* optional */ ...args);
+// return first non-empty result
 const value = o.firstNonEmpty(/* required */ "eventName", /* optional */ ...args);
+// return first result
 const value = o.first(/* required */ "eventName", /* optional */ ...args);
+// return last result
 const value = o.last(/* required */ "eventName", /* optional */ ...args);
 
 // Collect async data (these will always return Promise)
@@ -233,7 +256,7 @@ o.un(
 );
 
 // Relay another Observable's event
-o.relayEvent(
+o.relay(
     /* required */ anotherObservable, 
     /* required */ "eventName" | "*",
 
@@ -245,13 +268,26 @@ o.relayEvent(
 );
 
 // Stop relaying events
-o.unrelayEvent(
+o.unrelay(
     /* required */ anotherObservable, 
     /* required */ "eventName" | "*"
 );
 
 // create listener for external event bus
-o.getProxy(/* required */ "event-name-in-this-observable");
+const listener = o.proxy(/* required */ "eventNameInThisObservable");
+
+// add proxy to another event bus
+o.addEventSource({
+    /* required */ "proxyName",
+    /* required */ on: (eventName, listener, eventSource, listenerOptions) => {},
+    /* required */ un: (eventName, listener, eventSource) => {},
+    /* required */ accepts: (eventName) => boolean,
+    /* optional */ key: value
+});
+// check if proxy is already added
+o.hasEventSource("proxyName" || eventSourceObject);
+// remove proxy to another event bus
+o.removeEventSource("proxyName" || eventSourceObject)
 
 o.suspendEvent("eventName");
 o.suspendAllEvents();

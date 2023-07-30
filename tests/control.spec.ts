@@ -62,7 +62,7 @@ describe("Observable", function(){
         let triggered = true;
         let params: any[] = [];
 
-        ee.on("event-source", o.getProxy("event-target"));
+        ee.on("event-source", o.proxy("event-target"));
         o.on("event-target", (a:any, b:any) => {
             params.push(a);
             params.push(b);
@@ -119,9 +119,6 @@ describe("Observable", function(){
         assert(!o.hasListener("event", context.l2));
 
         assert(!o.hasListener("event2", l));
-
-        assert(o.hasEvent("event"));
-        assert(!o.hasEvent("event3"));
 
         o.removeAllListeners("event");
         assert(!o.hasListener());

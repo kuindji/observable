@@ -23,6 +23,27 @@ export type ReturnValue = undefined | any | any[] | { [key: string] : any } |
                             Promise<any[]> |
                             Promise<{ [key: string] : any }>;
 
+export type EventSourceSubscriber = (name: string, 
+                                    fn: ListenerFunction, 
+                                    eventSource: EventSource,
+                                    options?: ListenerOptions) => void;
+export type EventSourceUnsubscriber = (name: string, 
+                                        fn: ListenerFunction,
+                                        eventSource: EventSource) => void;
+
+export type EventSource = {
+    name: string,
+    on: EventSourceSubscriber,
+    un: EventSourceUnsubscriber,
+    accepts: (name: string) => boolean,
+    [key: string]: any
+};
+
+
+
+export type ProxyListener = (...args: any) => any|void;
+
+
 type BaseEventOptions = {
 
     /**

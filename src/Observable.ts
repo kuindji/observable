@@ -1,16 +1,23 @@
 import ObservableEvent from "./ObservableEvent"
 import { ReturnType } from "./types"
-import type { EventOptions, ListenerOptions, ListenerFunction, ReturnValue } from "./types"
+import type { EventOptions, 
+                ListenerOptions, 
+                ListenerFunction, 
+                ReturnValue,
+                EventSource,
+                EventSourceSubscriber,
+                EventSourceUnsubscriber,
+                ProxyListener } from "./types"
 
 type EventsMap = {
     [key: string]: ObservableEvent
 }
 
-type ExternalListener = (...args: any) => any|void;
-
-type ExternalListenersMap = {
-    [key: string]: ExternalListener
+type ProxyListenerMap = {
+    [key: string]: ProxyListener
 }
+
+let eventSourceId = 0;
 
 /**
  * A javascript event bus implementing multiple patterns: 
@@ -20,7 +27,8 @@ type ExternalListenersMap = {
 export default class Observable {
 
     events: EventsMap = {}
-    external: ExternalListenersMap = {}
+    external: ProxyListenerMap = {}
+    eventSources: EventSource[] = []
 
     /**
      * Use this method only if you need to provide event-level options
@@ -28,7 +36,6 @@ export default class Observable {
      * @param options Event options
      */
     createEvent(name: string, options?: EventOptions): void {
-        name = name.toLowerCase();
         const events  = this.events;
         if (!events[name]) {
             events[name] = new ObservableEvent(options);
@@ -43,7 +50,19 @@ export default class Observable {
     *       to triggerFilter (if you're using one).
     */
     on(name: string, fn: ListenerFunction, options?: ListenerOptions): void {
-        name = name.toLowerCase();
+
+        if (this.eventSources.length > 0) {
+            this.eventSources.forEach((evs: EventSource) => {
+                if (!evs.accepts(name)) {
+                    return;
+                }
+                if (evs.subscribed.indexOf(name) === -1) {
+                    evs.on(name, this.proxy(name), evs, options);
+                    evs.subscribed.push(name);
+                }
+            });
+        }
+        
         const events  = this.events;
         if (!events[name]) {
             events[name] = new ObservableEvent();
@@ -82,12 +101,24 @@ export default class Observable {
     *                         call un() with the same context
     */
     un(name: string, fn: ListenerFunction, context?: object) {
-        name = name.toLowerCase();
         const events  = this.events;
         if (!events[name]) {
             return;
         }
         events[name].un(fn, context);
+
+        if (this.eventSources.length > 0) {
+            const empty = !events[name].hasListener();
+            this.eventSources.forEach((evs: EventSource) => {
+                const inx = evs.subscribed.indexOf(name);
+                if (inx !== -1) {
+                    evs.subscribed.splice(inx, 1);
+                    if (empty) {
+                        evs.un(name, this.external[name], evs);
+                    }
+                }
+            });
+        }
     }
 
     /**
@@ -115,27 +146,60 @@ export default class Observable {
     }
 
     /**
-     * Create a listener function for external event bus that will relay events through
-     * this observable
-     * @param name Event name in this observable
-     * @returns 
-     */
-    getProxy(name: string): ExternalListener {
-        if (!this.external[name]) {
-            this.external[name] = (...args) => {
-                this.trigger.apply(this, [ name, ...args ]);
-            };
-        }
-        return this.external[name];
-    }
-
-    /**
      * Stop relaying events of <code>eventSource</code>
      * @param eventSource
      * @param eventName
      */
     unrelay(eventSource: Observable, eventName: string) {
         eventSource.un(eventName, this.trigger, this);
+    }
+
+
+    /**
+     * @param eventSource 
+     */
+    addEventSource(eventSource: EventSource): void {
+        if (!this.hasEventSource(eventSource.name)) {
+            this.eventSources.push({ ...eventSource, subscribed: [] });
+        }
+    }
+
+    removeEventSource(name: string | EventSource) {
+        const inx = this.eventSources.findIndex(
+            evs => typeof name === "string" ? evs.name === name : evs.name === name.name
+        );
+        if (inx !== -1) {
+            const evs = this.eventSources[inx];
+            evs.subscribed.forEach((name: string) => {
+                evs.un(name, this.external[name], evs);
+            })
+            this.eventSources.splice(inx, 1);
+        }
+    }
+
+    /**
+     * Check if event source with given name was added
+     * @param name 
+     */
+    hasEventSource(name: string | EventSource): boolean {
+        const inx = this.eventSources.findIndex(
+            evs => typeof name === "string" ? evs.name === name : evs.name === name.name
+        );
+        return inx !== -1;
+    }
+
+    /**
+     * Create a listener function for external event bus that will relay events through
+     * this observable
+     * @param name Event name in this observable
+     */
+    proxy(name: string): ProxyListener {
+        if (!this.external[name]) {
+            this.external[name] = (...args) => {
+                this.trigger.apply(this, [ name, ...args ]);
+            };
+        }
+        return this.external[name];
     }
 
     /**
@@ -148,7 +212,6 @@ export default class Observable {
         const events = this.events;
 
         if (name) {
-            name = name.toLowerCase();
             if (!events[name]) {
                 return false;
             }
@@ -162,14 +225,6 @@ export default class Observable {
             }
             return false;
         }
-    }
-
-    /**
-    * @param name Event name
-    * @return boolean
-    */
-    hasEvent(name: string) {
-        return !!this.events[name];
     }
 
 
@@ -363,8 +418,6 @@ export default class Observable {
         const events = this.events;
         let e: ObservableEvent;
 
-        name = name.toLowerCase();
-
         if (events[name]) {
             e = events[name];
             return resolve ? e.resolve(args, returnType) : e.trigger(args, returnType);
@@ -382,7 +435,6 @@ export default class Observable {
     * @param name Event name
     */
     suspendEvent(name: string) {
-        name = name.toLowerCase();
         const events  = this.events;
         if (!events[name]) {
             return;
@@ -402,7 +454,6 @@ export default class Observable {
     * @param name Event name
     */
     resumeEvent(name: string) {
-        name = name.toLowerCase();
         if (!this.events[name]) {
             return;
         }
@@ -420,7 +471,6 @@ export default class Observable {
      * @param name Event name
      */
     destroyEvent(name: string) {
-        name = name.toLowerCase();
         const events  = this.events;
         if (events[name]) {
             events[name].removeAllListeners();
