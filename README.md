@@ -300,11 +300,11 @@ o.createEvent(
         /**
          * Append parameters
          */
-        "append": array | (listener, args) => [],
+        "appendArgs": array | (listener, args) => [],
         /**
          * Prepend parameters
          */
-        "prepend": array | (listener, args) => [],
+        "prependArgs": array | (listener, args) => [],
         /**
          * Replace parameters
          */
