@@ -1,6 +1,6 @@
 {
     "name": "@kuindji/observable",
-    "version": "2.1.2",
+    "version": "2.2.0",
     "description": "A javascript event bus implementing multiple patterns: observable, collector and pipe.",
     "main": "dist/index.js",
     "types": "dist/index.d.ts",
@@ -26,9 +26,10 @@
         "@types/sinon": "^10.0.15",
         "chai": "^4.3.7",
         "mocha": "^10.2.0",
+        "prettier": "^2.8.0",
         "sinon": "^15.2.0",
         "ts-mocha": "^10.0.0",
         "typescript": "^5.1.6",
-        "prettier": "^2.8.0"
+        "events": "^3.3.0"
     }
 }

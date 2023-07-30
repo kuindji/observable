@@ -88,6 +88,12 @@ o2.on("local-name", () => console.log("OK!"));
 o1.trigger("another-event"); // OK!
 
 o2.unrelay(o1, "some-event");
+
+const o = new Observable;
+const ee = new EventEmitter();
+ee.on("source-event", o.getProxy("target-event"));
+o.on("target-event", () => console.log("ok"));
+ee.emit("source-event"); // ok
 ```
 
 ### Filter:
@@ -226,7 +232,7 @@ o.un(
     /* optional */ context
 );
 
-// Relay another observable's event
+// Relay another Observable's event
 o.relayEvent(
     /* required */ anotherObservable, 
     /* required */ "eventName" | "*",
@@ -243,6 +249,9 @@ o.unrelayEvent(
     /* required */ anotherObservable, 
     /* required */ "eventName" | "*"
 );
+
+// create listener for external event bus
+o.getProxy(/* required */ "event-name-in-this-observable");
 
 o.suspendEvent("eventName");
 o.suspendAllEvents();

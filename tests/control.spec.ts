@@ -1,10 +1,11 @@
 import { assert } from "chai"
+import { EventEmitter } from "events"
 import Observable from "../dist/index"
 import util from "./util"
 
 describe("Observable", function(){
 
-    it("should relay other events", function(){
+    it("should relay other events", () => {
 
         const o1 = new Observable;
         const o2 = new Observable;
@@ -22,7 +23,7 @@ describe("Observable", function(){
         assert.deepStrictEqual([1, 2, 2], triggered);
     });
 
-    it("should relay * events", function(){
+    it("should relay * events", () => {
 
         const o1 = new Observable;
         const o2 = new Observable;
@@ -38,7 +39,7 @@ describe("Observable", function(){
         assert.deepStrictEqual([1, 2], triggered);
     });
 
-    it("should relay * events with prefix", function(){
+    it("should relay * events with prefix", () => {
 
         const o1 = new Observable;
         const o2 = new Observable;
@@ -54,7 +55,27 @@ describe("Observable", function(){
         assert.deepStrictEqual([1, 2], triggered);
     });
 
-    it("should suspend and resume events", function(){
+    it("should relay from external event buses", () => {
+
+        const o = new Observable();
+        const ee = new EventEmitter();
+        let triggered = true;
+        let params: any[] = [];
+
+        ee.on("event-source", o.getProxy("event-target"));
+        o.on("event-target", (a:any, b:any) => {
+            params.push(a);
+            params.push(b);
+            triggered = true;
+        });
+
+        ee.emit("event-source", 1, 2);
+        
+        assert.deepStrictEqual([1, 2], params);
+        assert(triggered === true);
+    });
+
+    it("should suspend and resume events", () => {
         const o = new Observable;
         const triggered: number[] = [];
         const l = function() {
@@ -75,7 +96,7 @@ describe("Observable", function(){
         assert.deepStrictEqual([1,1,1], triggered);
     });
 
-    it("should indicate if it has a listener or not", function(){
+    it("should indicate if it has a listener or not", () => {
         const o = new Observable;
         const context = {
             l: function(){},

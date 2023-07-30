@@ -6,6 +6,12 @@ type EventsMap = {
     [key: string]: ObservableEvent
 }
 
+type ExternalListener = (...args: any) => any|void;
+
+type ExternalListenersMap = {
+    [key: string]: ExternalListener
+}
+
 /**
  * A javascript event bus implementing multiple patterns: 
  * observable, collector and pipe.
@@ -14,6 +20,7 @@ type EventsMap = {
 export default class Observable {
 
     events: EventsMap = {}
+    external: ExternalListenersMap = {}
 
     /**
      * Use this method only if you need to provide event-level options
@@ -105,6 +112,21 @@ export default class Observable {
                             } : 
                             undefined
         });
+    }
+
+    /**
+     * Create a listener function for external event bus that will relay events through
+     * this observable
+     * @param name Event name in this observable
+     * @returns 
+     */
+    getProxy(name: string): ExternalListener {
+        if (!this.external[name]) {
+            this.external[name] = (...args) => {
+                this.trigger.apply(this, [ name, ...args ]);
+            };
+        }
+        return this.external[name];
     }
 
     /**
@@ -419,5 +441,6 @@ export default class Observable {
         }
 
         this.events = {};
+        this.external = {};
     }
 };
