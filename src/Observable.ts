@@ -1,12 +1,11 @@
 import ObservableEvent from "./ObservableEvent"
 import { ReturnType } from "./types"
-import type { EventOptions, 
+import { EventOptions, 
                 ListenerOptions, 
                 ListenerFunction, 
                 ReturnValue,
                 EventSource,
-                EventSourceSubscriber,
-                EventSourceUnsubscriber,
+                ProxyType,
                 ProxyListener } from "./types"
 
 type EventsMap = {
@@ -16,8 +15,6 @@ type EventsMap = {
 type ProxyListenerMap = {
     [key: string]: ProxyListener
 }
-
-let eventSourceId = 0;
 
 /**
  * A javascript event bus implementing multiple patterns: 
@@ -53,11 +50,11 @@ export default class Observable {
 
         if (this.eventSources.length > 0) {
             this.eventSources.forEach((evs: EventSource) => {
-                if (!evs.accepts(name)) {
+                if (evs.accepts === false || (typeof evs.accepts === "function" && !evs.accepts(name))) {
                     return;
                 }
                 if (evs.subscribed.indexOf(name) === -1) {
-                    evs.on(name, this.proxy(name), evs, options);
+                    evs.on(name, this.proxy(name, evs.proxyType), evs, options);
                     evs.subscribed.push(name);
                 }
             });
@@ -111,10 +108,11 @@ export default class Observable {
             const empty = !events[name].hasListener();
             this.eventSources.forEach((evs: EventSource) => {
                 const inx = evs.subscribed.indexOf(name);
+                const key = name + "-" + evs.proxyType;
                 if (inx !== -1) {
                     evs.subscribed.splice(inx, 1);
                     if (empty) {
-                        evs.un(name, this.external[name], evs);
+                        evs.un(name, this.external[key], evs);
                     }
                 }
             });
@@ -123,14 +121,16 @@ export default class Observable {
 
     /**
      * Relay all events of <code>eventSource</code> through this observable.
-     * @param {object} eventSource
-     * @param {string} eventName
-     * @param {string} triggerName
-     * @param {string} triggerNamePfx prefix all relayed event names
+     * @param eventSource
+     * @param eventName
+     * @param triggerName
+     * @param triggerNamePfx prefix all relayed event names
+     * @param proxyType
      */
     relay(eventSource: Observable, eventName: string, 
-                triggerName?: string | null, triggerNamePfx?: string | null) {
-        eventSource.on(eventName, this.trigger, {
+                triggerName?: string | null, triggerNamePfx?: string | null,
+                proxyType: ProxyType = ProxyType.TRIGGER) {
+        eventSource.on(eventName, this[proxyType], {
             context: this,
             prependArgs: eventName === "*" ? 
                         undefined: 
@@ -154,16 +154,22 @@ export default class Observable {
         eventSource.un(eventName, this.trigger, this);
     }
 
-
     /**
      * @param eventSource 
      */
     addEventSource(eventSource: EventSource): void {
         if (!this.hasEventSource(eventSource.name)) {
-            this.eventSources.push({ ...eventSource, subscribed: [] });
+            this.eventSources.push({ 
+                proxyType: ProxyType.TRIGGER,
+                ...eventSource, 
+                subscribed: [] 
+            });
         }
     }
 
+    /**
+     * @param name  eventSource name or eventSource
+     */
     removeEventSource(name: string | EventSource) {
         const inx = this.eventSources.findIndex(
             evs => typeof name === "string" ? evs.name === name : evs.name === name.name
@@ -171,7 +177,8 @@ export default class Observable {
         if (inx !== -1) {
             const evs = this.eventSources[inx];
             evs.subscribed.forEach((name: string) => {
-                evs.un(name, this.external[name], evs);
+                const key = name + "-" + evs.proxyType;
+                evs.un(name, this.external[key], evs);
             })
             this.eventSources.splice(inx, 1);
         }
@@ -192,23 +199,27 @@ export default class Observable {
      * Create a listener function for external event bus that will relay events through
      * this observable
      * @param name Event name in this observable
+     * @param proxyType 
      */
-    proxy(name: string): ProxyListener {
-        if (!this.external[name]) {
-            this.external[name] = (...args) => {
-                this.trigger.apply(this, [ name, ...args ]);
+    proxy(name: string, proxyType: ProxyType = ProxyType.TRIGGER): ProxyListener {
+        const key = name + "-" + proxyType;
+        if (!this.external[key]) {
+            this.external[key] = (...args) => {
+                const res = this[proxyType].apply(this, [ name, ...args ]);
+                if (proxyType !== "trigger") {
+                    return res;
+                }
             };
         }
-        return this.external[name];
+        return this.external[key];
     }
 
     /**
     * @param name Event name 
     * @param fn Callback function 
     * @param context
-    * @return boolean
     */
-    hasListener(name?: string, fn?: ListenerFunction, context?: object) {
+    has(name?: string, fn?: ListenerFunction, context?: object) {
         const events = this.events;
 
         if (name) {
@@ -225,6 +236,17 @@ export default class Observable {
             }
             return false;
         }
+    }
+
+    /**
+     * @deprecated
+     * Same as has()
+     * @param name 
+     * @param fn 
+     * @param context 
+     */
+    hasListener(name?: string, fn?: ListenerFunction, context?: object) {
+        return this.has(name, fn, context);
     }
 
 
@@ -364,7 +386,7 @@ export default class Observable {
      * @param [...args]
      */
     untilTrue(name: string, ...args: any[]): void | Promise<void> {
-        return this._trigger(name, args, ReturnType.FIRST_TRUE);
+        return this._trigger(name, args, ReturnType.UNTIL_TRUE);
     }
 
     /**
@@ -373,7 +395,7 @@ export default class Observable {
      * @param [...args]
      */
     untilFalse(name: string, ...args: any[]): void | Promise<void> {
-        return this._trigger(name, args, ReturnType.FIRST_FALSE);
+        return this._trigger(name, args, ReturnType.UNTIL_FALSE);
     }
 
     /**

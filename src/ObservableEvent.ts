@@ -216,10 +216,10 @@ export default class ObservableEvent {
             args = this.prepareArgs(listener, args);
             return this.lcall(listener, args);
         }
-        else if (returnType === ReturnType.FIRST_TRUE && prevValue === true) {
+        else if (returnType === ReturnType.UNTIL_TRUE && prevValue === true) {
             return true;
         }
-        else if (returnType === ReturnType.FIRST_FALSE && prevValue === false) {
+        else if (returnType === ReturnType.UNTIL_FALSE && prevValue === false) {
             return false;
         }
         else if (returnType === ReturnType.FIRST_NON_EMPTY && prevValue !== null && prevValue !== undefined) {
@@ -262,8 +262,8 @@ export default class ObservableEvent {
         const results: any[] = [],
             queue: Listener[] = this.listeners.slice(),
             isConsequent = returnType === ReturnType.PIPE ||
-                            returnType === ReturnType.FIRST_TRUE ||
-                            returnType === ReturnType.FIRST_FALSE ||
+                            returnType === ReturnType.UNTIL_TRUE ||
+                            returnType === ReturnType.UNTIL_FALSE ||
                             returnType === ReturnType.FIRST_NON_EMPTY;
 
         let args: any[],
@@ -326,13 +326,13 @@ export default class ObservableEvent {
 
             if (isConsequent) {
                 switch (returnType) {
-                    case ReturnType.FIRST_TRUE: {
+                    case ReturnType.UNTIL_TRUE: {
                         if (listenerResult === true) {
                             return true;
                         }
                         break;
                     }
-                    case ReturnType.FIRST_FALSE: {
+                    case ReturnType.UNTIL_FALSE: {
                         if (listenerResult === false) {
                             return false;
                         }
@@ -382,10 +382,10 @@ export default class ObservableEvent {
             case ReturnType.LAST: {
                 return results.pop();
             }
-            case ReturnType.FIRST_TRUE: {
+            case ReturnType.UNTIL_TRUE: {
                 return;
             }
-            case ReturnType.FIRST_FALSE: {
+            case ReturnType.UNTIL_FALSE: {
                 return;
             }
             case ReturnType.FIRST_NON_EMPTY: {

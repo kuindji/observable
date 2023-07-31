@@ -7,10 +7,10 @@ export enum ReturnType {
     LAST = "last",
     PIPE = "pipe",
     FIRST = "first",
-    FIRST_FALSE = "first_true",
-    FIRST_TRUE = "first_false",
+    UNTIL_TRUE = "true",
+    UNTIL_FALSE = "false",
     FIRST_NON_EMPTY = "nonempty"
-}
+};
 
 export type TriggerFilter = (params: any[], listener?: Listener) => boolean;
 
@@ -35,7 +35,8 @@ export type EventSource = {
     name: string,
     on: EventSourceSubscriber,
     un: EventSourceUnsubscriber,
-    accepts: (name: string) => boolean,
+    accepts: ((name: string) => boolean) | boolean,
+    proxyType?: ProxyType,
     [key: string]: any
 };
 
@@ -43,6 +44,26 @@ export type EventSource = {
 
 export type ProxyListener = (...args: any) => any|void;
 
+export enum ProxyType {
+    TRIGGER = "trigger",
+    RAW = "raw",
+    ALL = "all",
+    CONCAT = "concat",
+    MERGE = "merge",
+    LAST = "last",
+    PIPE = "pipe",
+    FIRST = "first",
+    UNTIL_TRUE = "untilTrue",
+    UNTIL_FALSE = "untilFalse",
+    FIRST_NON_EMPTY = "firstNonEmpty",
+    RESOLVE_ALL = "resolveAll",
+    RESOLVE_MERGE = "resolveMerge",
+    RESOLVE_CONCAT = "resolveConcat",
+    RESOLVE_FIRST = "resolveFirst",
+    RESOLVE_FIRST_NON_EMPTY = "resolveFirstNonEmpty",
+    RESOLVE_LAST = "resolveLast",
+    RESOLVE_PIPE = "resolvePipe"
+}
 
 type BaseEventOptions = {
 

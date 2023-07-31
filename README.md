@@ -274,14 +274,18 @@ o.unrelay(
 );
 
 // create listener for external event bus
-const listener = o.proxy(/* required */ "eventNameInThisObservable");
+const listener = o.proxy(
+    /* required */ "eventNameInThisObservable",
+    /* optional */ "all" | "first" | "etc, methods of Observable"
+);
 
 // add proxy to another event bus
 o.addEventSource({
     /* required */ "proxyName",
     /* required */ on: (eventName, listener, eventSource, listenerOptions) => {},
     /* required */ un: (eventName, listener, eventSource) => {},
-    /* required */ accepts: (eventName) => boolean,
+    /* required */ accepts: ((eventName) => boolean) | boolean,
+    /* optional */ proxyType: "all" | "first" | "etc, methods of Observable"
     /* optional */ key: value
 });
 // check if proxy is already added

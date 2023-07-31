@@ -1,6 +1,6 @@
 import { assert } from "chai"
 import { EventEmitter } from "events"
-import Observable from "../dist/index"
+import Observable, { ProxyType } from "../dist/index"
 import util from "./util"
 
 describe("Observable", function(){
@@ -53,6 +53,19 @@ describe("Observable", function(){
         o2.trigger("event2");
 
         assert.deepStrictEqual([1, 2], triggered);
+    });
+
+    it("should pass results back to relay", () => {
+
+        const o1 = new Observable;
+        const o2 = new Observable;
+
+        o1.relay(o2, "event", null, null, ProxyType.ALL);
+        o1.on("event", () => 1);
+        o1.on("event", () => 2);
+        const res = o2.first("event");
+
+        assert.deepStrictEqual([1, 2], res);
     });
 
     it("should relay from external event buses", () => {

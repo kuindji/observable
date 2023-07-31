@@ -1,6 +1,6 @@
 import { assert } from "chai"
 import { EventEmitter } from "events"
-import Observable from "../dist/index"
+import Observable, { ProxyType } from "../dist/index"
 
 
 describe("Event source", () => {
@@ -48,6 +48,27 @@ describe("Event source", () => {
         em.emit("event");
 
         assert(triggered === 1);
+    });
+
+    it("should return value based on proxyType", () => {
+        const em = new Observable;
+        const o = new Observable;
+        o.addEventSource({
+            name: "ev",
+            proxyType: ProxyType.CONCAT,
+            accepts: true,
+            on: (name, fn) => em.on(name, fn),
+            un: (name, fn) => em.un(name, fn)
+        });
+
+        const listener1 = () => [1, 2];
+        const listener2 = () => [3, 4];
+        o.on("event", listener1);
+        o.on("event", listener2);
+        
+        const res = em.first("event");
+        console.log(res)
+        assert.deepStrictEqual([1, 2, 3, 4], res);
     });
     
 })
