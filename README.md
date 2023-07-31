@@ -188,18 +188,18 @@ o.on(
         "start": 0,
 
         // append these arguments when calling the listener
-        "appendArgs": array | (listener, args) => [],
+        "appendArgs": array || (listener, args) => [],
 
         // prepend these arguments when calling the listener
-        "prependArgs": array | (listener, args) => [],
+        "prependArgs": array || (listener, args) => [],
 
         // replace with these arguments when calling the listener
-        "replaceArgs": array | (listener, args) => [],
+        "replaceArgs": array || (listener, args) => [],
 
         // Run event asynchronously. 
         // number = number of milliseconds
         // true = 0ms
-        "async": boolean | number
+        "async": boolean || number
     }
 );
 
@@ -258,34 +258,38 @@ o.un(
 // Relay another Observable's event
 o.relay(
     /* required */ anotherObservable, 
-    /* required */ "eventName" | "*",
+    /* required */ "eventName" || "*",
 
     // when relaying all events ("*"),
     // use "triggerName" to replace original event names with this single one
     // or "triggerPrefix" to add this prefix to original event name
-    /* optional */ "triggerName" | null,
-    /* optional */ "triggerPrefix" | null
+    /* optional */ "triggerName" || null,
+    /* optional */ "triggerPrefix" || null,
+
+    // if proxyType if specified, anotherObservable can use the return values
+    // of this observable's listeners via anotherObservable.first()
+    /* optional */ "all" || "first" || "etc, methods of Observable"
 );
 
 // Stop relaying events
 o.unrelay(
     /* required */ anotherObservable, 
-    /* required */ "eventName" | "*"
+    /* required */ "eventName" || "*"
 );
 
 // create listener for external event bus
 const listener = o.proxy(
     /* required */ "eventNameInThisObservable",
-    /* optional */ "all" | "first" | "etc, methods of Observable"
+    /* optional */ "all" || "first" || "etc, methods of Observable"
 );
 
 // add proxy to another event bus
 o.addEventSource({
-    /* required */ "proxyName",
+    /* required */ name: "proxyName",
     /* required */ on: (eventName, listener, eventSource, listenerOptions) => {},
     /* required */ un: (eventName, listener, eventSource) => {},
-    /* required */ accepts: ((eventName) => boolean) | boolean,
-    /* optional */ proxyType: "all" | "first" | "etc, methods of Observable"
+    /* required */ accepts: ((eventName) => boolean) || boolean,
+    /* optional */ proxyType: "all" || "first" || "etc, methods of Observable"
     /* optional */ key: value
 });
 // check if proxy is already added
@@ -301,7 +305,13 @@ o.resumeAllEvents();
 // Check if already subscribed
 o.hasListener(
     /* optional */ "eventName",
-    /* optional */ function | number,
+    /* optional */ function || number,
+    /* optional */ context
+);
+// alias for hasListener
+o.has(
+    /* optional */ "eventName",
+    /* optional */ function || number,
     /* optional */ context
 );
 
@@ -349,19 +359,19 @@ o.createEvent(
         /**
          * Append parameters
          */
-        "appendArgs": array | (listener, args) => [],
+        "appendArgs": array || (listener, args) => [],
         /**
          * Prepend parameters
          */
-        "prependArgs": array | (listener, args) => [],
+        "prependArgs": array || (listener, args) => [],
         /**
          * Replace parameters
          */
-        "replaceArgs": array | (listener, args) => [],
+        "replaceArgs": array || (listener, args) => [],
         /**
          * Call this listener asynchronously. Milliseconds or true|false
          */
-        "async": boolean | number,
+        "async": boolean || number,
     }
 );
 
