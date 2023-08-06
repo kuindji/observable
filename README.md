@@ -303,12 +303,6 @@ o.resumeEvent("eventName");
 o.resumeAllEvents();
 
 // Check if already subscribed
-o.hasListener(
-    /* optional */ "eventName",
-    /* optional */ function || number,
-    /* optional */ context
-);
-// alias for hasListener
 o.has(
     /* optional */ "eventName",
     /* optional */ function || number,
@@ -375,6 +369,13 @@ o.createEvent(
     }
 );
 
+// Public api
+const api = o.getPublicApi(); 
+// { on(), un(), once(), has() }
+// o.getPublicApi() === o.getPublicApi()
+
 // Remove all event listeners and reset options
 o.destroyEvent("eventName");
+
+o.$destroy();
 ```

@@ -1,6 +1,6 @@
 {
     "name": "@kuindji/observable",
-    "version": "2.2.1",
+    "version": "2.2.2",
     "description": "A javascript event bus implementing multiple patterns: observable, collector and pipe.",
     "main": "dist/index.js",
     "types": "dist/index.d.ts",
@@ -19,6 +19,13 @@
     },
     "author": "Ivan Kuindzhi",
     "license": "ISC",
+    "keywords": [
+        "events",
+        "observable",
+        "pipe",
+        "collector",
+        "relay"
+    ],
     "devDependencies": {
         "@types/chai": "^4.3.5",
         "@types/expect": "^24.3.0",

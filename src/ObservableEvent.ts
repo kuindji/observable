@@ -115,7 +115,8 @@ export default class ObservableEvent {
     un(fn: ListenerFunction, context?: object) {
 
         const listeners = this.listeners;
-        const inx = listeners.findIndex(l => l.fn === fn && l.context === context);
+        const inx = listeners.findIndex(l => l.fn === fn && !!l.context === !!context &&
+                                                (!context || l.context === context));
 
         if (inx === -1) {
             return false;

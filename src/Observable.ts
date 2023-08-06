@@ -1,12 +1,13 @@
 import ObservableEvent from "./ObservableEvent"
-import { ReturnType } from "./types"
-import { EventOptions, 
-                ListenerOptions, 
-                ListenerFunction, 
-                ReturnValue,
-                EventSource,
-                ProxyType,
-                ProxyListener } from "./types"
+import { ObservablePubliApi, 
+            ReturnType, 
+            EventOptions, 
+            ListenerOptions, 
+            ListenerFunction, 
+            ReturnValue,
+            EventSource,
+            ProxyType,
+            ProxyListener } from "./types"
 
 type EventsMap = {
     [key: string]: ObservableEvent
@@ -26,6 +27,7 @@ export default class Observable {
     events: EventsMap = {}
     external: ProxyListenerMap = {}
     eventSources: EventSource[] = []
+    publicApi: ObservablePubliApi | null = null;
 
     /**
      * Use this method only if you need to provide event-level options
@@ -97,7 +99,7 @@ export default class Observable {
     * @param context If you called on() with context you must 
     *                         call un() with the same context
     */
-    un(name: string, fn: ListenerFunction, context?: object) {
+    un(name: string, fn: ListenerFunction, context?: object): void {
         const events  = this.events;
         if (!events[name]) {
             return;
@@ -219,7 +221,7 @@ export default class Observable {
     * @param fn Callback function 
     * @param context
     */
-    has(name?: string, fn?: ListenerFunction, context?: object) {
+    has(name?: string, fn?: ListenerFunction, context?: object): boolean {
         const events = this.events;
 
         if (name) {
@@ -245,7 +247,7 @@ export default class Observable {
      * @param fn 
      * @param context 
      */
-    hasListener(name?: string, fn?: ListenerFunction, context?: object) {
+    hasListener(name?: string, fn?: ListenerFunction, context?: object): boolean {
         return this.has(name, fn, context);
     }
 
@@ -268,8 +270,6 @@ export default class Observable {
             }
         }
     }
-
-
 
     /**
      * Trigger event and return all results from the listeners
@@ -501,12 +501,26 @@ export default class Observable {
         }
     }
 
+    getPublicApi(): ObservablePubliApi {
+        if (this.publicApi === null) {
+            this.publicApi = {
+                on: this.on.bind(this),
+                un: this.un.bind(this),
+                once: this.once.bind(this),
+                has: this.has.bind(this)
+            }
+        }
+        return this.publicApi;
+    }
 
     /**
     * Destroy observable
     */
     $destroy() {
         const events = this.events;
+        const eventSources = this.eventSources;
+
+        eventSources.forEach(ev => this.removeEventSource(ev));
 
         for (const name in events) {
             this.destroyEvent(name);
@@ -514,5 +528,7 @@ export default class Observable {
 
         this.events = {};
         this.external = {};
+        this.eventSources = [];
+        this.publicApi = null;
     }
 };

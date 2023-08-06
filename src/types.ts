@@ -157,3 +157,15 @@ export type Listener = ListenerOptions & {
     count: number,
     index: number
 }
+
+export type ObservableApiOn = (name: string, fn: ListenerFunction, options?: ListenerOptions) => void;
+export type ObservableApiOnce = (name: string, fn: ListenerFunction, options?: ListenerOptions) => void;
+export type ObservableApiUn = (name: string, fn: ListenerFunction, context?: object) => void;
+export type ObservableApiHas = (name?: string, fn?: ListenerFunction, context?: object) => boolean;
+
+export type ObservablePubliApi = {
+    on: ObservableApiOn,
+    un: ObservableApiUn,
+    once: ObservableApiOnce,
+    has: ObservableApiHas
+}

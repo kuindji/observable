@@ -122,21 +122,31 @@ describe("Observable", function(){
         o.on("event", l);
         o.on("event", context.l, { context });
 
-        assert(o.hasListener());
-        assert(o.hasListener("event"));
-        assert(!o.hasListener("event2"));
-        assert(!o.hasListener("event3"));
+        assert(o.has());
+        assert(o.has("event"));
+        assert(!o.has("event2"));
+        assert(!o.has("event3"));
 
-        assert(o.hasListener("event", l));
-        assert(o.hasListener("event", context.l, context));
-        assert(!o.hasListener("event", context.l2));
+        assert(o.has("event", l));
+        assert(o.has("event", context.l, context));
+        assert(!o.has("event", context.l2));
 
-        assert(!o.hasListener("event2", l));
+        assert(!o.has("event2", l));
 
         o.removeAllListeners("event");
-        assert(!o.hasListener());
-        assert(!o.hasListener("event"));
-        assert(!o.hasListener("event", l));
-        assert(!o.hasListener("event", context.l));
+        assert(!o.has());
+        assert(!o.has("event"));
+        assert(!o.has("event", l));
+        assert(!o.has("event", context.l));
+    });
+
+    it("should create a public api", () => {
+        const o = new Observable();
+        const api = o.getPublicApi();
+        let triggered: boolean = false;
+        api.on("event", () => triggered = true);
+        o.trigger("event");
+
+        assert(triggered);
     });
 });
