@@ -4,3 +4,5 @@ tsconfig-build.json
 tslint.json
 .prettierrc
 tests
+node_modules
+yarn.lock

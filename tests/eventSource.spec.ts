@@ -67,7 +67,6 @@ describe("Event source", () => {
         o.on("event", listener2);
         
         const res = em.first("event");
-        console.log(res)
         assert.deepStrictEqual([1, 2, 3, 4], res);
     });
     

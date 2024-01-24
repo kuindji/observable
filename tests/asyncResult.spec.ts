@@ -175,5 +175,33 @@ describe("Observable", function(){
                 done();
             });
         });
+
+        it("resolve first", function(done){
+            const o = new Observable;
+            const opt: Opt = { triggered: false };
+            o.on("event", l1(1));
+            o.on("event", l2(2, opt));
+            o.resolveFirst("event").then((res) => {
+                assert.equal(1, res);
+                assert(opt.triggered === false);
+                done();
+            }).catch(function(reason){
+                done(reason);
+            });
+        });
+
+        it("resolve *", function(done){
+            const o = new Observable;
+            const opt: Opt = { triggered: false };
+            o.on("*", l1(1));
+            o.on("*", l2(2, opt));
+            o.resolveFirst("non-existent-event").then((res) => {
+                assert.equal(1, res);
+                assert(opt.triggered === false);
+                done();
+            }).catch(function(reason){
+                done(reason);
+            });
+        });
     });
 });

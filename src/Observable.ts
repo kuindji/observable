@@ -440,15 +440,16 @@ export default class Observable {
         const events = this.events;
         let e: ObservableEvent;
 
-        if (events[name]) {
-            e = events[name];
+        if (e = events[name]) {
             return resolve ? e.resolve(args, returnType) : e.trigger(args, returnType);
         }
 
         // trigger * event with current event name
         // as first argument
         if (e = events["*"]) {
-            e.trigger([ name, ...args ], returnType);
+            return resolve ? 
+                e.resolve([ name, ...args ], returnType) : 
+                e.trigger([ name, ...args ], returnType);
         }
     }
 
