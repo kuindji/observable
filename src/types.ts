@@ -12,6 +12,8 @@ export enum ReturnType {
     FIRST_NON_EMPTY = "nonempty"
 };
 
+export type InterceptorFunction = (eventName: string, params: any[], returnType: ReturnType | null) => boolean;
+
 export type TriggerFilter = (params: any[], listener?: Listener) => boolean;
 
 export type ListenerFunction = (...args: any) => any;

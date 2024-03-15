@@ -305,8 +305,16 @@ o.resumeEvent("eventName");
 o.resumeAllEvents();
 o.isSuspended("eventName");
 o.isQueued("eventName");
+o.hasQueue(/* optional */ "eventName");
 // if event is suspended with queue, all trigger calls will be queued 
 // and replayed once event is resumed (good for batch() behavior)
+
+// Intercept all triggers and return boolean to allow or disallow
+o.intercept(function("eventName", args, returnType) {
+    return boolean;
+});
+// Stop intercepting
+o.stopIntercepting();
 
 // Check if already subscribed
 o.has(

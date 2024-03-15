@@ -147,6 +147,28 @@ describe("Observable", function(){
         assert.deepStrictEqual([1,1,1], triggered);
     });
 
+    it("intercept events", () => {
+        const o = new Observable;
+        const triggered: number[] = [];
+        const events: string[] = [];
+        const args: number[] = [];
+        const l = function(arg) { triggered.push(arg); };
+        const interceptor = function(event, a) {
+            events.push(event);
+            args.push(a[0]);
+            return false;
+        }
+
+        o.on("event", l);
+        o.trigger("event", 1);
+        o.intercept(interceptor);
+        o.trigger("event", 2);
+
+        assert.deepStrictEqual([1], triggered);
+        assert.deepStrictEqual([2], args);
+        assert.deepStrictEqual(["event"], events);
+    });
+
     it("should indicate if it has a listener or not", () => {
         const o = new Observable;
         const context = {

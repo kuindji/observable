@@ -7,7 +7,8 @@ import { ObservablePubliApi,
             ReturnValue,
             EventSource,
             ProxyType,
-            ProxyListener } from "./types"
+            ProxyListener, 
+            InterceptorFunction} from "./types"
 
 type EventsMap = {
     [key: string]: ObservableEvent
@@ -27,7 +28,8 @@ export default class Observable {
     events: EventsMap = {}
     external: ProxyListenerMap = {}
     eventSources: EventSource[] = []
-    publicApi: ObservablePubliApi | null = null;
+    publicApi: ObservablePubliApi | null = null
+    interceptor: InterceptorFunction | null = null
 
     /**
      * Use this method only if you need to provide event-level options
@@ -90,6 +92,21 @@ export default class Observable {
         return new Promise((resolve) => {
             this.once(name, resolve, options);
         });
+    }
+
+    /**
+     * Intercept all triggers and return boolean to allow or disallow event call
+     * @param fn 
+     */
+    intercept(fn: InterceptorFunction) {
+        this.interceptor = fn;
+    }
+
+    /**
+     * Stop intercepting triggers
+     */
+    stopIntercepting() {
+        this.interceptor = null;
     }
 
     /**
@@ -343,7 +360,6 @@ export default class Observable {
         return this._trigger(name, args, ReturnType.MERGE, true);
     }
 
-
     /**
      * Trigger event and return all results from the listeners flattened into one array
      * @param name Event name
@@ -437,6 +453,12 @@ export default class Observable {
 
     _trigger(name: string, args: any[], returnType: ReturnType | null = null, resolve: boolean = false): ReturnValue {
 
+        if (this.interceptor) {
+            if (this.interceptor(name, args, returnType) !== true) {
+                return undefined;
+            }
+        }
+
         const events = this.events;
         let e: ObservableEvent;
 
@@ -490,6 +512,31 @@ export default class Observable {
         }
         return events[name].queued;
     }
+
+    /**
+     * Check if event has queued calls
+     * @param name Event name (optional)
+     */
+    hasQueue(name?: string): boolean {
+        const events = this.events;
+        if (name) {
+            if (!events[name]) {
+                return false;
+            }
+            return events[name].queue.length > 0;
+        }
+        else {
+            let found = false;
+            for (const name in events) {
+                if (events[name].queue.length > 0) {
+                    found = true;
+                    break;
+                }
+            }
+            return found;
+        }
+    }
+
 
     /**
     * Suspend all events. Suspended event will not call any listeners on trigger().
