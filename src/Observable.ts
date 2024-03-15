@@ -455,20 +455,51 @@ export default class Observable {
 
     /**
     * Suspend an event. Suspended event will not call any listeners on trigger().
+    * If withQueue=true, events will be triggered after resume()
     * @param name Event name
+    * @param withQueue enable events queue
     */
-    suspendEvent(name: string) {
+    suspendEvent(name: string, withQueue: boolean = false) {
         const events  = this.events;
         if (!events[name]) {
-            return;
+            events[name] = new ObservableEvent();
         }
-        events[name].suspend();
+        events[name].suspend(withQueue);
     }
 
-    suspendAllEvents() {
+    /**
+     * Check if event was suspended
+     * @param name Event name
+     */
+    isSuspended(name: string): boolean {
+        const events  = this.events;
+        if (!events[name]) {
+            return false;
+        }
+        return events[name].suspended;
+    }
+
+    /**
+     * Check if event was suspended with queue
+     * @param name Event name
+     */
+    isQueued(name: string): boolean {
+        const events  = this.events;
+        if (!events[name]) {
+            return false;
+        }
+        return events[name].queued;
+    }
+
+    /**
+    * Suspend all events. Suspended event will not call any listeners on trigger().
+    * If withQueue=true, events will be triggered after resume()
+    * @param withQueue enable events queue
+    */
+    suspendAllEvents(withQueue: boolean = false) {
         const events  = this.events;
         for (const name in events) {
-            events[name].suspend();
+            events[name].suspend(withQueue);
         }
     }
 

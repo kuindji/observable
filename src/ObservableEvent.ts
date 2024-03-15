@@ -6,7 +6,6 @@ import { ListenerFunction, ListenerOptions,
         Listener, TriggerFilter, ReturnValue,
         EventOptions, ArgumetsTransformer } from "./types"
 
-
 /**
  * This class is private - you can't create an event other than via Observable.
  * @private
@@ -14,7 +13,9 @@ import { ListenerFunction, ListenerOptions,
 export default class ObservableEvent {
 
     listeners: Listener[] = []
+    queue: Array<[Array<any>, ReturnType | null]> = []
     suspended: boolean = false
+    queued: boolean = false
     triggered: number = 0
     lastTrigger: any[] | null = null
     sortListeners: boolean = false
@@ -38,6 +39,7 @@ export default class ObservableEvent {
      * 
      */
     $destroy() {
+        this.queue = [];
         this.listeners = [];
         this.filter = null;
         this.filterContext = null;
@@ -144,12 +146,23 @@ export default class ObservableEvent {
         this.listeners = [];
     }
 
-    suspend() {
+    suspend(withQueue: boolean = false) {
         this.suspended = true;
+        if (withQueue) {
+            this.queued = true;
+        }
     }
 
     resume() {
         this.suspended = false;
+        this.queued = false;
+
+        if (this.queue.length > 0) {
+            for (let i = 0, l = this.queue.length; i < l; i++) {
+                this.trigger(this.queue[i][0], this.queue[i][1]);
+            }
+            this.queue = [];
+        }
     }
 
     getFilterContext(l: Listener) {
@@ -231,6 +244,10 @@ export default class ObservableEvent {
 
     trigger(origArgs: any[], returnType: ReturnType | null = null): ReturnValue {
 
+        if (this.queued) {
+            this.queue.push([ origArgs, returnType ]);
+            return;
+        }
         if (this.suspended) {
             return;
         }

@@ -10,8 +10,8 @@ const o = new Observable;
 o.on("event", (x, y, z) => console.log([x, y, z]));
 o.trigger("event", 1, 2, 3); // [1, 2, 3]
 // other methods:
-o.untilTrue("event")
-o.untilFalse("event")
+o.untilTrue("event");
+o.untilFalse("event");
 ```
 
 ### Collector:
@@ -32,12 +32,12 @@ const results = await o.resolveAll("collectStuff"); // [1, 2, 3]
 ```
 Other collector methods:
 ```javascript
-o.first("event")
-o.last("event")
-o.firstNonEmpty("event")
-o.concat("event")
-o.merge("event")
-o.raw("event")
+o.first("event");
+o.last("event");
+o.firstNonEmpty("event");
+o.concat("event");
+o.merge("event");
+o.raw("event");
 ```
 
 ### Pipe:
@@ -295,12 +295,18 @@ o.addEventSource({
 // check if proxy is already added
 o.hasEventSource("proxyName" || eventSourceObject);
 // remove proxy to another event bus
-o.removeEventSource("proxyName" || eventSourceObject)
+o.removeEventSource("proxyName" || eventSourceObject);
 
 o.suspendEvent("eventName");
 o.suspendAllEvents();
+o.suspendEvent("eventName", true /* with queue */);
+o.suspendAllEvents(true /* with queue */);
 o.resumeEvent("eventName");
 o.resumeAllEvents();
+o.isSuspended("eventName");
+o.isQueued("eventName");
+// if event is suspended with queue, all trigger calls will be queued 
+// and replayed once event is resumed (good for batch() behavior)
 
 // Check if already subscribed
 o.has(

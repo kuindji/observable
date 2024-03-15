@@ -109,6 +109,44 @@ describe("Observable", function(){
         assert.deepStrictEqual([1,1,1], triggered);
     });
 
+
+    it("should return correct suspended state", () => {
+        const o = new Observable;
+        
+        o.createEvent("event1");
+        o.createEvent("event2");
+        o.createEvent("event3");
+
+        o.suspendEvent("event1");
+        o.suspendEvent("event2", true);
+
+        assert(o.isSuspended("event1"));
+        assert(!o.isQueued("event1"));
+
+        assert(o.isSuspended("event2"));
+        assert(o.isQueued("event2"));
+
+        assert(!o.isSuspended("event3"));
+        assert(!o.isQueued("event3"));
+    });
+
+    it("should suspend and resume events with queue", () => {
+        const o = new Observable;
+        const triggered: number[] = [];
+        const l = function() {
+            triggered.push(1);
+        };
+
+        o.on("event", l);
+        o.trigger("event");
+        o.suspendEvent("event", true);
+        o.trigger("event");
+        o.trigger("event");
+        o.resumeEvent("event");
+
+        assert.deepStrictEqual([1,1,1], triggered);
+    });
+
     it("should indicate if it has a listener or not", () => {
         const o = new Observable;
         const context = {
