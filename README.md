@@ -161,6 +161,9 @@ o.on(
         // "this" object to call listener with
         "context": null,
 
+        /* You can tag a listener */
+        "tags": [],
+
         /*
          * This function will be called each time event is triggered. 
          * Return false to skip listener.
@@ -248,11 +251,17 @@ const value = await o.resolvePipe(/* required */ "eventName", /* optional */ arg
 // Get a promise for the next trigger and receive event's payload
 await o.promise("eventName");
 
+// Trigger all those listeners that are tagged with tagName
+o.withTags(["tagName"], () => {
+    o.trigger("eventName"); // also works with all,first,resolve etc
+});
+
 // Unsubscribe from event
 o.un(
     /* required */ "eventName",
     /* required */ () => {},
-    /* optional */ context
+    /* optional */ context,
+    /* optional */ "tagName"
 );
 
 // Relay another Observable's event
@@ -287,7 +296,7 @@ const listener = o.proxy(
 o.addEventSource({
     /* required */ name: "proxyName",
     /* required */ on: (eventName, listener, eventSource, listenerOptions) => {},
-    /* required */ un: (eventName, listener, eventSource) => {},
+    /* required */ un: (eventName, listener, eventSource, tagName) => {},
     /* required */ accepts: ((eventName) => boolean) || boolean,
     /* optional */ proxyType: "all" || "first" || "etc, methods of Observable"
     /* optional */ key: value
@@ -310,7 +319,7 @@ o.hasQueue(/* optional */ "eventName");
 // and replayed once event is resumed (good for batch() behavior)
 
 // Intercept all triggers and return boolean to allow or disallow
-o.intercept(function("eventName", args, returnType) {
+o.intercept(function("eventName", args, returnType, [ "tagName" ]) {
     return boolean;
 });
 // Stop intercepting
@@ -320,11 +329,12 @@ o.stopIntercepting();
 o.has(
     /* optional */ "eventName",
     /* optional */ function || number,
-    /* optional */ context
+    /* optional */ context,
+    /* optional */ "tagName"
 );
 
 // Remove all listeners from event
-o.removeAllListeners("eventName");
+o.removeAllListeners("eventName", /* optional */ "tagName");
 
 
 /*
@@ -361,7 +371,7 @@ o.createEvent(
         "filter": function(args, listener?) {},
 
         /*
-         * "this" context to call triggerFilter in
+         * "this" context to call filter() in
          */
         "filterContext": any,
         /**

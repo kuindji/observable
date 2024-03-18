@@ -209,4 +209,37 @@ describe("Observable", function(){
 
         assert(triggered);
     });
+
+
+    it("should work with tags", () => {
+        const o = new Observable;
+        const triggered: number[] = [];
+        const a = () => triggered.push(1);
+        const b = () => triggered.push(2);
+        const c = () => triggered.push(3);
+
+        o.on("event", a, { tags: [ "a" ] });
+        o.on("event", b, { tags: [ "b" ] });
+        o.on("event", c, { tags: [ "a", "b" ] });
+
+        o.withTags(["a"], () => o.trigger("event"));
+        assert.deepStrictEqual([1,3], triggered);
+        o.trigger("event");
+        assert.deepStrictEqual([1,3,1,2,3], triggered);
+
+        assert(o.has("event", null, null, "a"));
+        assert(!o.has("event", null, null, "c"));
+        assert(o.has("event", a, null, "a"));
+        assert(!o.has("event", b, null, "a"));
+        
+        o.un("event", a, null, "a");
+        o.un("event", b, null, "a");
+
+        assert(!o.has("event", a, null, "a"));
+        assert(o.has("event", b));
+        assert(o.has("event", null, null, "a"));
+
+        o.removeAllListeners("event", "a");
+        assert(!o.has("event", c));
+    });
 });

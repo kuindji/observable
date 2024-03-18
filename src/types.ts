@@ -12,7 +12,7 @@ export enum ReturnType {
     FIRST_NON_EMPTY = "nonempty"
 };
 
-export type InterceptorFunction = (eventName: string, params: any[], returnType: ReturnType | null) => boolean;
+export type InterceptorFunction = (eventName: string, params: any[], returnType: ReturnType | null, tags?: string[]|null) => boolean;
 
 export type TriggerFilter = (params: any[], listener?: Listener) => boolean;
 
@@ -31,7 +31,8 @@ export type EventSourceSubscriber = (name: string,
                                     options?: ListenerOptions) => void;
 export type EventSourceUnsubscriber = (name: string, 
                                         fn: ListenerFunction,
-                                        eventSource: EventSource) => void;
+                                        eventSource: EventSource,
+                                        tag?: string) => void;
 
 export type EventSource = {
     name: string,
@@ -42,7 +43,7 @@ export type EventSource = {
     [key: string]: any
 };
 
-
+export type WithTagCallback = (...args: any) => any|void;
 
 export type ProxyListener = (...args: any) => any|void;
 
@@ -146,6 +147,10 @@ export type ListenerOptions = BaseEventOptions & {
      * Listener's context (this) object
      */
     context?: object,
+    /**
+     * Listener tags
+     */
+    tags?: string[],
     /**
      * You can pass any additional fields here. They will be passed back to TriggerFilter
      */

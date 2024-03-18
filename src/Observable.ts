@@ -8,7 +8,8 @@ import { ObservablePubliApi,
             EventSource,
             ProxyType,
             ProxyListener, 
-            InterceptorFunction} from "./types"
+            InterceptorFunction,
+            WithTagCallback} from "./types"
 
 type EventsMap = {
     [key: string]: ObservableEvent
@@ -30,6 +31,13 @@ export default class Observable {
     eventSources: EventSource[] = []
     publicApi: ObservablePubliApi | null = null
     interceptor: InterceptorFunction | null = null
+    _tags?: string[] | null = null
+
+    withTags(tags: string[], fn: WithTagCallback) {
+        this._tags = tags;
+        fn();
+        this._tags = undefined;
+    }
 
     /**
      * Use this method only if you need to provide event-level options
@@ -116,12 +124,12 @@ export default class Observable {
     * @param context If you called on() with context you must 
     *                         call un() with the same context
     */
-    un(name: string, fn: ListenerFunction, context?: object): void {
+    un(name: string, fn: ListenerFunction, context?: object | null, tag?: string): void {
         const events  = this.events;
         if (!events[name]) {
             return;
         }
-        events[name].un(fn, context);
+        events[name].un(fn, context, tag);
 
         if (this.eventSources.length > 0) {
             const empty = !events[name].hasListener();
@@ -131,7 +139,7 @@ export default class Observable {
                 if (inx !== -1) {
                     evs.subscribed.splice(inx, 1);
                     if (empty) {
-                        evs.un(name, this.external[key], evs);
+                        evs.un(name, this.external[key], evs, tag);
                     }
                 }
             });
@@ -238,18 +246,18 @@ export default class Observable {
     * @param fn Callback function 
     * @param context
     */
-    has(name?: string, fn?: ListenerFunction, context?: object): boolean {
+    has(name?: string | null, fn?: ListenerFunction | null, context?: object | null, tag?: string): boolean {
         const events = this.events;
 
         if (name) {
             if (!events[name]) {
                 return false;
             }
-            return events[name].hasListener(fn, context);
+            return events[name].hasListener(fn, context, tag);
         }
         else {
             for (name in events) {
-                if (events[name].hasListener()) {
+                if (events[name].hasListener(undefined, undefined, tag)) {
                     return true;
                 }
             }
@@ -264,8 +272,8 @@ export default class Observable {
      * @param fn 
      * @param context 
      */
-    hasListener(name?: string, fn?: ListenerFunction, context?: object): boolean {
-        return this.has(name, fn, context);
+    hasListener(name?: string | null, fn?: ListenerFunction | null, context?: object | null, tag?: string): boolean {
+        return this.has(name, fn, context, tag);
     }
 
 
@@ -273,17 +281,17 @@ export default class Observable {
     * Remove all listeners from specific event or from all events
     * @param name Event name
     */
-    removeAllListeners(name: string) {
+    removeAllListeners(name: string, tag?: string) {
         const events  = this.events;
         if (name) {
             if (!events[name]) {
                 return;
             }
-            events[name].removeAllListeners();
+            events[name].removeAllListeners(tag);
         }
         else {
             for (name in events) {
-                events[name].removeAllListeners();
+                events[name].removeAllListeners(tag);
             }
         }
     }
@@ -454,7 +462,7 @@ export default class Observable {
     _trigger(name: string, args: any[], returnType: ReturnType | null = null, resolve: boolean = false): ReturnValue {
 
         if (this.interceptor) {
-            if (this.interceptor(name, args, returnType) !== true) {
+            if (this.interceptor(name, args, returnType, this._tags) !== true) {
                 return undefined;
             }
         }
@@ -463,15 +471,17 @@ export default class Observable {
         let e: ObservableEvent;
 
         if (e = events[name]) {
-            return resolve ? e.resolve(args, returnType) : e.trigger(args, returnType);
+            return resolve ? 
+                    e.resolve(args, returnType, this._tags) : 
+                    e.trigger(args, returnType, this._tags);
         }
 
         // trigger * event with current event name
         // as first argument
         if (e = events["*"]) {
             return resolve ? 
-                e.resolve([ name, ...args ], returnType) : 
-                e.trigger([ name, ...args ], returnType);
+                e.resolve([ name, ...args ], returnType, this._tags) : 
+                e.trigger([ name, ...args ], returnType, this._tags);
         }
     }
 

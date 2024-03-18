@@ -6,6 +6,15 @@ import { ListenerFunction, ListenerOptions,
         Listener, TriggerFilter, ReturnValue,
         EventOptions, ArgumetsTransformer } from "./types"
 
+function tagsIntersect(t1: string[], t2: string[]): boolean {
+    for (const tag of t1) {
+        if (t2.indexOf(tag) !== -1) {
+            return true;
+        }
+    }
+    return false;
+}
+
 /**
  * This class is private - you can't create an event other than via Observable.
  * @private
@@ -113,12 +122,27 @@ export default class ObservableEvent {
     /**
      * @param fn Callback function
      * @param context 
+     * @param tag
+     * @return boolean
      */
-    un(fn: ListenerFunction, context?: object) {
+    un(fn: ListenerFunction, context?: object | null, tag?: string): boolean {
 
         const listeners = this.listeners;
-        const inx = listeners.findIndex(l => l.fn === fn && !!l.context === !!context &&
-                                                (!context || l.context === context));
+        const inx = listeners.findIndex(l => {
+            if (l.fn !== fn) {
+                return false;
+            }
+            if (!!l.context !== !!context) {
+                return false;
+            }
+            if (!!context && l.context !== context) {
+                return false;
+            }
+            if (!!tag && (!l.tags || l.tags.indexOf(tag) === -1)) {
+                return false;
+            }
+            return true;
+        });
 
         if (inx === -1) {
             return false;
@@ -131,19 +155,42 @@ export default class ObservableEvent {
 
     /**
      * @param fn Callback function
+     * @param context 
+     * @param tag
      * @return boolean
      */
-    hasListener(fn?: ListenerFunction, context?: object) {
+    hasListener(fn?: ListenerFunction | null, context?: object | null, tag?: string | null): boolean {
         if (fn) {
-            return this.listeners.findIndex(l => l.fn === fn && l.context === context) !== -1;
+            return this.listeners.findIndex(l => {
+                if (l.fn !== fn) {
+                    return false;
+                }
+                if (context && l.context !== context) {
+                    return false;
+                }
+                if (tag && (!l.tags || l.tags.indexOf(tag) === -1)) {
+                    return false;
+                }
+                return true;
+            }) !== -1;
+        }
+        if (tag) {
+            return this.listeners.findIndex(l => l.tags && l.tags.indexOf(tag) !== -1) !== -1;
         }
         else {
             return this.listeners.length > 0;
         }
     }
 
-    removeAllListeners() {
-        this.listeners = [];
+    removeAllListeners(tag?: string) {
+        if (tag) {
+            this.listeners = this.listeners.filter(l => {
+                return !l.tags || l.tags.indexOf(tag) === -1;
+            });
+        }
+        else {
+            this.listeners = [];    
+        }
     }
 
     suspend(withQueue: boolean = false) {
@@ -242,7 +289,7 @@ export default class ObservableEvent {
         return this.lcall(listener, args);
     }
 
-    trigger(origArgs: any[], returnType: ReturnType | null = null): ReturnValue {
+    trigger(origArgs: any[], returnType: ReturnType | null = null, tags?: string[] | null): ReturnValue {
 
         if (this.queued) {
             this.queue.push([ origArgs, returnType ]);
@@ -303,6 +350,11 @@ export default class ObservableEvent {
 
             if (listener.filter && 
                 listener.filter.call(this.getFilterContext(listener), args) === false) {
+                continue;
+            }
+
+            if (tags && tags.length > 0 && 
+                (!listener.tags || !tagsIntersect(tags, listener.tags))) {
                 continue;
             }
 
@@ -415,7 +467,7 @@ export default class ObservableEvent {
         }
     }
 
-    resolve(origArgs: any[], returnType: ReturnType | null = null): Promise<any> {
-        return Promise.resolve(this.trigger(origArgs, returnType));
+    resolve(origArgs: any[], returnType: ReturnType | null = null, tags?: string[] | null): Promise<any> {
+        return Promise.resolve(this.trigger(origArgs, returnType, tags));
     }
 }
