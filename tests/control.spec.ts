@@ -106,9 +106,9 @@ describe('Observable', function () {
     it('should return correct suspended state', () => {
         const o = new Observable();
 
-        o.setEventOptions('event1');
-        o.setEventOptions('event2');
-        o.setEventOptions('event3');
+        // o.setEventOptions('event1');
+        // o.setEventOptions('event2');
+        // o.setEventOptions('event3');
 
         o.suspendEvent('event1');
         o.suspendEvent('event2', true);
@@ -172,8 +172,8 @@ describe('Observable', function () {
         };
         const l = function () {};
 
-        o.setEventOptions('event');
-        o.setEventOptions('event2');
+        // o.setEventOptions('event');
+        // o.setEventOptions('event2');
         o.on('event', l);
         o.on('event', context.l, { context });
 

@@ -21,7 +21,7 @@ import {
  * @private
  */
 export default class ObservableEvent<
-    P extends GenericEventArguments = Array<any>,
+    P extends GenericEventArguments = any[],
     R = GenericEventHandlerReturnValue,
     O extends GenericEventArguments = P,
 > {

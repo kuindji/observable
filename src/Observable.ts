@@ -16,11 +16,14 @@ import {
     GetEventHandlerReturnValue,
     EventName,
     GetEventHandlerArguments,
+    ReturnableProxyType,
+    GenericEventArguments,
+    GenericEventHandlerReturnValue,
 } from './types';
 
-type EventStore<Id extends symbol> = Record<
+type EventStore<Id extends symbol | string> = Record<
     keyof EventMap[Id] | string | symbol,
-    ObservableEvent
+    ObservableEvent<GenericEventArguments, GenericEventHandlerReturnValue>
 >;
 
 type ProxyListenerMap = {
@@ -32,7 +35,7 @@ type ProxyListenerMap = {
  * observable, collector and pipe.
  * @author Ivan Kuindzhi
  */
-export default class Observable<Id extends symbol = any> {
+export default class Observable<Id extends symbol | string = any> {
     events: EventStore<Id> = {} as EventStore<Id>;
     external: ProxyListenerMap = {};
     eventSources: EventSource[] = [];
@@ -53,9 +56,10 @@ export default class Observable<Id extends symbol = any> {
      */
     createEvent<K extends EventName<Id>>(
         name: K,
-        options?: EventOptions<
+        options: EventOptions<
             GetEventArguments<Id, K>,
-            GetEventHandlerReturnValue<Id, K>
+            GetEventHandlerReturnValue<Id, K>,
+            GetEventHandlerArguments<Id, K>
         >,
     ): void {
         this.setEventOptions(name, options);
@@ -68,16 +72,20 @@ export default class Observable<Id extends symbol = any> {
      */
     setEventOptions<K extends EventName<Id>>(
         name: K,
-        options?: EventOptions<
+        options: EventOptions<
             GetEventArguments<Id, K>,
-            GetEventHandlerReturnValue<Id, K>
+            GetEventHandlerReturnValue<Id, K>,
+            GetEventHandlerArguments<Id, K>
         >,
     ): void {
         if (!this.events[name]) {
             this.events[name] = new ObservableEvent<
                 GetEventArguments<Id, K>,
-                GetEventHandlerReturnValue<Id, K>
+                GetEventHandlerReturnValue<Id, K>,
+                GetEventHandlerArguments<Id, K>
             >(options);
+        } else {
+            this.events[name].setOptions(options);
         }
     }
 
@@ -91,12 +99,13 @@ export default class Observable<Id extends symbol = any> {
     on<K extends EventName<Id>>(
         name: K,
         fn: ListenerFunction<
-            GetEventArguments<Id, K>,
+            GetEventHandlerArguments<Id, K>,
             GetEventHandlerReturnValue<Id, K>
         >,
         options?: ListenerOptions<
             GetEventArguments<Id, K>,
-            GetEventHandlerReturnValue<Id, K>
+            GetEventHandlerReturnValue<Id, K>,
+            GetEventHandlerArguments<Id, K>
         >,
     ): void {
         if (this.eventSources.length > 0) {
@@ -111,24 +120,23 @@ export default class Observable<Id extends symbol = any> {
                 if (evs.subscribed.indexOf(name) === -1) {
                     evs.on(
                         name as string | symbol,
-                        this.proxy(name as string | symbol, evs.proxyType),
+                        this.proxy(name, evs.proxyType),
                         evs,
-                        options,
+                        options as ListenerOptions<any[], any, any[]>,
                     );
                     evs.subscribed.push(name);
                 }
             });
         }
 
-        const events = this.events;
-        if (events[name] === undefined) {
-            events[name] = new ObservableEvent<
+        if (!this.events[name]) {
+            this.events[name] = new ObservableEvent<
                 GetEventArguments<Id, K>,
                 GetEventHandlerReturnValue<Id, K>,
                 GetEventHandlerArguments<Id, K>
             >();
         }
-        events[name].on(fn, options);
+        this.events[name].on(fn, options);
     }
 
     /**
@@ -210,16 +218,18 @@ export default class Observable<Id extends symbol = any> {
         tag?: string,
     ): void {
         const events = this.events;
-        if (!events[name]) {
-            return;
+        if (events[name]) {
+            events[name].un(fn, context, tag);
         }
-        events[name].un(fn, context, tag);
 
         if (this.eventSources.length > 0) {
             const empty = !events[name].hasListener();
             this.eventSources.forEach((evs: EventSource) => {
                 const inx = evs.subscribed.indexOf(name);
-                const key = (name as string) + '-' + evs.proxyType;
+                const key =
+                    (name as string) +
+                    '-' +
+                    (evs.proxyType || ProxyType.TRIGGER);
                 if (inx !== -1) {
                     evs.subscribed.splice(inx, 1);
                     if (empty) {
@@ -238,28 +248,41 @@ export default class Observable<Id extends symbol = any> {
      * @param triggerNamePfx prefix all relayed event names
      * @param proxyType
      */
-    relay(
-        eventSource: Observable,
-        eventName: string,
-        triggerName?: string | null,
+    relay<
+        ExternalId extends symbol | string = any,
+        KS extends EventName<ExternalId> = string | symbol,
+        KT extends EventName<Id> = string | symbol,
+    >(
+        eventSource: Observable<ExternalId>,
+        eventName: KS,
+        triggerName?: KT | null,
         triggerNamePfx?: string | null,
         proxyType: ProxyType = ProxyType.TRIGGER,
     ) {
-        eventSource.on(eventName, this[proxyType], {
-            context: this,
-            prependArgs:
-                eventName === '*'
-                    ? undefined
-                    : // use provided new event name or original name
-                      [triggerName || eventName],
-            replaceArgs:
-                eventName === '*' && triggerNamePfx
-                    ? function (l, args) {
-                          args[0] = triggerNamePfx + args[0];
-                          return args;
-                      }
-                    : undefined,
-        });
+        if (eventName === '*') {
+            const l = this[proxyType] as ListenerFunction<
+                GetEventArguments<ExternalId, KS>,
+                GetEventHandlerReturnValue<ExternalId, KS>
+            >;
+            eventSource.on(eventName, l, {
+                context: this,
+                replaceArgs: (l, args: GetEventArguments<ExternalId, KS>) => {
+                    if (triggerNamePfx) {
+                        args[0] = triggerNamePfx + args[0];
+                    }
+                    return args as GetEventHandlerArguments<ExternalId, KS>;
+                },
+            });
+        } else {
+            const l = this[proxyType] as ListenerFunction<
+                GetEventArguments<ExternalId, KS>,
+                GetEventHandlerReturnValue<ExternalId, KS>
+            >;
+            eventSource.on(eventName, l, {
+                context: this,
+                prependArgs: [triggerName || eventName],
+            });
+        }
     }
 
     /**
@@ -267,12 +290,19 @@ export default class Observable<Id extends symbol = any> {
      * @param eventSource
      * @param eventName
      */
-    unrelay(
-        eventSource: Observable,
-        eventName: string | symbol,
+    unrelay<
+        ExternalId extends symbol | string = any,
+        KS extends EventName<ExternalId> = string | symbol,
+    >(
+        eventSource: Observable<ExternalId>,
+        eventName: KS,
         proxyType: ProxyType = ProxyType.TRIGGER,
     ) {
-        eventSource.un(eventName, this[proxyType], this);
+        const l = this[proxyType] as ListenerFunction<
+            GetEventArguments<ExternalId, KS>,
+            GetEventHandlerReturnValue<ExternalId, KS>
+        >;
+        eventSource.un(eventName, l, this);
     }
 
     /**
@@ -326,19 +356,80 @@ export default class Observable<Id extends symbol = any> {
      * @param name Event name in this observable
      * @param proxyType
      */
-    proxy(
-        name: string | symbol,
-        proxyType: ProxyType = ProxyType.TRIGGER,
-    ): ProxyListener {
-        const key = (name as string) + '-' + proxyType;
+    // proxy<K extends EventName<Id>>(
+    //     name: K,
+    //     proxyType?:
+    //         | ProxyType.TRIGGER
+    //         | ProxyType.UNTIL_FALSE
+    //         | ProxyType.UNTIL_TRUE,
+    // ): ProxyListener<GetEventArguments<Id, K>, void>;
+    // proxy<K extends EventName<Id>>(
+    //     name: K,
+    //     proxyType:
+    //         | ProxyType.FIRST
+    //         | ProxyType.LAST
+    //         | ProxyType.FIRST_NON_EMPTY
+    //         | ProxyType.PIPE
+    //         | ProxyType.MERGE,
+    // ): ProxyListener<
+    //     GetEventArguments<Id, K>,
+    //     GetEventHandlerReturnValue<Id, K> | undefined
+    // >;
+    // proxy<K extends EventName<Id>>(
+    //     name: K,
+    //     proxyType:
+    //         | ProxyType.RESOLVE_FIRST
+    //         | ProxyType.RESOLVE_LAST
+    //         | ProxyType.RESOLVE_FIRST_NON_EMPTY
+    //         | ProxyType.RESOLVE_PIPE
+    //         | ProxyType.RESOLVE_MERGE,
+    // ): ProxyListener<
+    //     GetEventArguments<Id, K>,
+    //     Promise<GetEventHandlerReturnValue<Id, K> | undefined>
+    // >;
+    // proxy<K extends EventName<Id>>(
+    //     name: K,
+    //     proxyType: ProxyType.ALL | ProxyType.CONCAT | ProxyType.RAW,
+    // ): ProxyListener<
+    //     GetEventArguments<Id, K>,
+    //     Array<GetEventHandlerReturnValue<Id, K>>
+    // >;
+    // proxy<K extends EventName<Id>>(
+    //     name: K,
+    //     proxyType: ProxyType.RESOLVE_ALL | ProxyType.RESOLVE_CONCAT,
+    // ): ProxyListener<
+    //     GetEventArguments<Id, K>,
+    //     Promise<Array<GetEventHandlerReturnValue<Id, K>>>
+    // >;
+    proxy<K extends EventName<Id>>(
+        name: K,
+        proxyType?: ProxyType,
+    ): ProxyListener<
+        GetEventArguments<Id, K>,
+        | GetEventHandlerReturnValue<Id, K>
+        | Promise<GetEventHandlerReturnValue<Id, K> | undefined>
+        | Array<GetEventHandlerReturnValue<Id, K>>
+        | Promise<Array<GetEventHandlerReturnValue<Id, K>>>
+        | undefined
+    > {
+        const key = (name as string) + '-' + (proxyType || ProxyType.TRIGGER);
         if (!this.external[key]) {
-            this.external[key] = (...args) => {
-                const res = this[proxyType].apply(this, [
-                    name as string | symbol,
-                    ...args,
-                ]);
-                if (proxyType !== ProxyType.TRIGGER) {
-                    return res;
+            this.external[key] = (...args: GetEventArguments<Id, K>) => {
+                if (
+                    proxyType !== undefined &&
+                    proxyType !== null &&
+                    proxyType !== ProxyType.TRIGGER &&
+                    proxyType !== ProxyType.UNTIL_FALSE &&
+                    proxyType !== ProxyType.UNTIL_TRUE
+                ) {
+                    const fn =
+                        this[proxyType as ReturnableProxyType].bind(this);
+                    return fn(name as string | symbol, ...args);
+                } else {
+                    this[proxyType || ProxyType.TRIGGER].apply(this, [
+                        name as string | symbol,
+                        ...args,
+                    ]);
                 }
             };
         }
@@ -420,10 +511,8 @@ export default class Observable<Id extends symbol = any> {
      */
     all<K extends EventName<Id>>(
         name: K,
-        ...args: any[]
-    ):
-        | Array<GetEventHandlerReturnValue<Id, K>>
-        | Promise<Array<GetEventHandlerReturnValue<Id, K>>> {
+        ...args: GetEventArguments<Id, K>
+    ): Array<GetEventHandlerReturnValue<Id, K>> {
         return this._trigger(name, args, TriggerReturnType.ALL);
     }
 
@@ -434,7 +523,7 @@ export default class Observable<Id extends symbol = any> {
      */
     resolveAll<K extends EventName<Id>>(
         name: K,
-        ...args: any[]
+        ...args: GetEventArguments<Id, K>
     ): Promise<Array<GetEventHandlerReturnValue<Id, K>>> {
         return this._trigger(name, args, TriggerReturnType.ALL, true);
     }
@@ -446,10 +535,8 @@ export default class Observable<Id extends symbol = any> {
      */
     first<K extends EventName<Id>>(
         name: K,
-        ...args: any[]
-    ):
-        | GetEventHandlerReturnValue<Id, K>
-        | Promise<GetEventHandlerReturnValue<Id, K>> {
+        ...args: GetEventArguments<Id, K>
+    ): GetEventHandlerReturnValue<Id, K> | undefined {
         return this._trigger(name, args, TriggerReturnType.FIRST);
     }
 
@@ -460,7 +547,7 @@ export default class Observable<Id extends symbol = any> {
      */
     resolveFirst<K extends EventName<Id>>(
         name: K,
-        ...args: any[]
+        ...args: GetEventArguments<Id, K>
     ): Promise<GetEventHandlerReturnValue<Id, K>> {
         return this._trigger(name, args, TriggerReturnType.FIRST, true);
     }
@@ -472,10 +559,8 @@ export default class Observable<Id extends symbol = any> {
      */
     last<K extends EventName<Id>>(
         name: K,
-        ...args: any[]
-    ):
-        | GetEventHandlerReturnValue<Id, K>
-        | Promise<GetEventHandlerReturnValue<Id, K>> {
+        ...args: GetEventArguments<Id, K>
+    ): GetEventHandlerReturnValue<Id, K> | undefined {
         return this._trigger(name, args, TriggerReturnType.LAST);
     }
 
@@ -486,7 +571,7 @@ export default class Observable<Id extends symbol = any> {
      */
     resolveLast<K extends EventName<Id>>(
         name: K,
-        ...args: any[]
+        ...args: GetEventArguments<Id, K>
     ): Promise<GetEventHandlerReturnValue<Id, K>> {
         return this._trigger(name, args, TriggerReturnType.LAST, true);
     }
@@ -498,10 +583,8 @@ export default class Observable<Id extends symbol = any> {
      */
     merge<K extends EventName<Id>>(
         name: K,
-        ...args: any[]
-    ):
-        | GetEventHandlerReturnValue<Id, K>
-        | Promise<GetEventHandlerReturnValue<Id, K>> {
+        ...args: GetEventArguments<Id, K>
+    ): GetEventHandlerReturnValue<Id, K> {
         return this._trigger(name, args, TriggerReturnType.MERGE);
     }
 
@@ -512,7 +595,7 @@ export default class Observable<Id extends symbol = any> {
      */
     resolveMerge<K extends EventName<Id>>(
         name: K,
-        ...args: any[]
+        ...args: GetEventArguments<Id, K>
     ): Promise<GetEventHandlerReturnValue<Id, K>> {
         return this._trigger(name, args, TriggerReturnType.MERGE, true);
     }
@@ -524,11 +607,8 @@ export default class Observable<Id extends symbol = any> {
      */
     concat<K extends EventName<Id>>(
         name: K,
-        ...args: any[]
-    ): Array<
-        | GetEventHandlerReturnValue<Id, K>
-        | Promise<GetEventHandlerReturnValue<Id, K>>
-    > {
+        ...args: GetEventArguments<Id, K>
+    ): Array<GetEventHandlerReturnValue<Id, K>> {
         return this._trigger(name, args, TriggerReturnType.CONCAT);
     }
 
@@ -539,7 +619,7 @@ export default class Observable<Id extends symbol = any> {
      */
     resolveConcat<K extends EventName<Id>>(
         name: K,
-        ...args: any[]
+        ...args: GetEventArguments<Id, K>
     ): Promise<Array<GetEventHandlerReturnValue<Id, K>>> {
         return this._trigger(name, args, TriggerReturnType.CONCAT, true);
     }
@@ -551,10 +631,8 @@ export default class Observable<Id extends symbol = any> {
      */
     firstNonEmpty<K extends EventName<Id>>(
         name: K,
-        ...args: any[]
-    ):
-        | GetEventHandlerReturnValue<Id, K>
-        | Promise<GetEventHandlerReturnValue<Id, K>> {
+        ...args: GetEventArguments<Id, K>
+    ): GetEventHandlerReturnValue<Id, K> | undefined {
         return this._trigger(name, args, TriggerReturnType.FIRST_NON_EMPTY);
     }
 
@@ -565,8 +643,8 @@ export default class Observable<Id extends symbol = any> {
      */
     resolveFirstNonEmpty<K extends EventName<Id>>(
         name: K,
-        ...args: any[]
-    ): Promise<GetEventHandlerReturnValue<Id, K>> | Promise<undefined> {
+        ...args: GetEventArguments<Id, K>
+    ): Promise<GetEventHandlerReturnValue<Id, K> | undefined> {
         return this._trigger(
             name,
             args,
@@ -580,7 +658,10 @@ export default class Observable<Id extends symbol = any> {
      * @param name Event name
      * @param [...args]
      */
-    untilTrue<K extends EventName<Id>>(name: K, ...args: any[]): void {
+    untilTrue<K extends EventName<Id>>(
+        name: K,
+        ...args: GetEventArguments<Id, K>
+    ): void {
         this._trigger(name, args, TriggerReturnType.UNTIL_TRUE);
     }
 
@@ -589,7 +670,10 @@ export default class Observable<Id extends symbol = any> {
      * @param name Event name
      * @param [...args]
      */
-    untilFalse<K extends EventName<Id>>(name: K, ...args: any[]): void {
+    untilFalse<K extends EventName<Id>>(
+        name: K,
+        ...args: GetEventArguments<Id, K>
+    ): void {
         this._trigger(name, args, TriggerReturnType.UNTIL_FALSE);
     }
 
@@ -598,7 +682,10 @@ export default class Observable<Id extends symbol = any> {
      * @param name Event name
      * @param [...args]
      */
-    pipe<K extends EventName<Id>>(name: K, ...args: any[]): any | Promise<any> {
+    pipe<K extends EventName<Id>>(
+        name: K,
+        ...args: GetEventArguments<Id, K>
+    ): GetEventHandlerReturnValue<Id, K> | undefined {
         return this._trigger(name, args, TriggerReturnType.PIPE);
     }
 
@@ -610,8 +697,8 @@ export default class Observable<Id extends symbol = any> {
      */
     resolvePipe<K extends EventName<Id>>(
         name: K,
-        ...args: any[]
-    ): TriggerReturnValue<GetEventHandlerReturnValue<Id, K>> {
+        ...args: GetEventArguments<Id, K>
+    ): Promise<GetEventHandlerReturnValue<Id, K> | undefined> {
         return this._trigger(name, args, TriggerReturnType.PIPE, true);
     }
 
@@ -622,10 +709,8 @@ export default class Observable<Id extends symbol = any> {
      */
     raw<K extends EventName<Id>>(
         name: K,
-        ...args: any[]
-    ):
-        | Array<GetEventHandlerReturnValue<Id, K>>
-        | Promise<Array<GetEventHandlerReturnValue<Id, K>>> {
+        ...args: GetEventArguments<Id, K>
+    ): Array<GetEventHandlerReturnValue<Id, K>> {
         return this._trigger(name, args, TriggerReturnType.RAW);
     }
 
@@ -634,26 +719,26 @@ export default class Observable<Id extends symbol = any> {
      * @param name
      * @param [...args]
      */
-    trigger<K extends EventName<Id>>(name: K, ...args: any[]): void {
+    trigger<K extends EventName<Id>>(
+        name: K,
+        ...args: GetEventArguments<Id, K>
+    ): void {
         this._trigger(name, args, undefined, undefined);
     }
 
     _trigger<K extends EventName<Id>>(
         name: K,
-        args: GetEventHandlerArguments<Id, K>,
+        args: GetEventArguments<Id, K>,
         returnType:
             | TriggerReturnType.ALL
             | TriggerReturnType.CONCAT
             | TriggerReturnType.RAW,
         resolve?: false,
-    ): Array<
-        | GetEventHandlerReturnValue<Id, K>
-        | Promise<GetEventHandlerReturnValue<Id, K>>
-    >;
+    ): Array<GetEventHandlerReturnValue<Id, K>>;
 
     _trigger<K extends EventName<Id>>(
         name: K,
-        args: GetEventHandlerArguments<Id, K>,
+        args: GetEventArguments<Id, K>,
         returnType:
             | TriggerReturnType.ALL
             | TriggerReturnType.CONCAT
@@ -663,7 +748,7 @@ export default class Observable<Id extends symbol = any> {
 
     _trigger<K extends EventName<Id>>(
         name: K,
-        args: GetEventHandlerArguments<Id, K>,
+        args: GetEventArguments<Id, K>,
         returnType:
             | TriggerReturnType.FIRST
             | TriggerReturnType.LAST
@@ -671,14 +756,11 @@ export default class Observable<Id extends symbol = any> {
             | TriggerReturnType.PIPE
             | TriggerReturnType.MERGE,
         resolve?: false,
-    ):
-        | GetEventHandlerReturnValue<Id, K>
-        | Promise<GetEventHandlerReturnValue<Id, K>>
-        | undefined;
+    ): GetEventHandlerReturnValue<Id, K> | undefined;
 
     _trigger<K extends EventName<Id>>(
         name: K,
-        args: GetEventHandlerArguments<Id, K>,
+        args: GetEventArguments<Id, K>,
         returnType:
             | TriggerReturnType.FIRST
             | TriggerReturnType.LAST
@@ -690,7 +772,7 @@ export default class Observable<Id extends symbol = any> {
 
     _trigger<K extends EventName<Id>>(
         name: K,
-        args: GetEventHandlerArguments<Id, K>,
+        args: GetEventArguments<Id, K>,
         returnType:
             | TriggerReturnType.UNTIL_FALSE
             | TriggerReturnType.UNTIL_TRUE
@@ -701,7 +783,7 @@ export default class Observable<Id extends symbol = any> {
 
     _trigger<K extends EventName<Id>>(
         name: K,
-        args: GetEventHandlerArguments<Id, K>,
+        args: GetEventArguments<Id, K>,
         returnType:
             | TriggerReturnType.UNTIL_FALSE
             | TriggerReturnType.UNTIL_TRUE
@@ -712,7 +794,7 @@ export default class Observable<Id extends symbol = any> {
 
     _trigger<K extends EventName<Id>>(
         name: K,
-        args?: GetEventHandlerArguments<Id, K>,
+        args?: GetEventArguments<Id, K>,
         returnType?: TriggerReturnType | null,
         resolve?: boolean,
     ): TriggerReturnValue<GetEventHandlerReturnValue<Id, K>> {
@@ -731,20 +813,27 @@ export default class Observable<Id extends symbol = any> {
 
         const events = this.events;
         let e: ObservableEvent;
+        let result;
 
         if ((e = events[name])) {
-            return resolve
-                ? e.resolve(args || [], returnType, this._tags)
-                : e.trigger(args || [], returnType, this._tags);
+            result =
+                resolve === true
+                    ? e.resolve(args || [], returnType, this._tags)
+                    : e.trigger(args || [], returnType, this._tags);
+        } else if (resolve === true) {
+            result = Promise.resolve(undefined);
         }
 
         // trigger * event with current event name
         // as first argument
         if ((e = events['*'])) {
-            return resolve
-                ? e.resolve([name, ...(args || [])], returnType, this._tags)
-                : e.trigger([name, ...(args || [])], returnType, this._tags);
+            e.trigger([name, ...(args || [])], null, this._tags);
+            // resolve
+            //     ? e.resolve([name, ...(args || [])], returnType, this._tags)
+            //     : e.trigger([name, ...(args || [])], returnType, this._tags);
         }
+
+        return result;
     }
 
     /**

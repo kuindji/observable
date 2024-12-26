@@ -1,39 +1,49 @@
-export type GenericEventArguments = Array<any>;
+export type GenericEventArguments = any[];
 export type GenericEventHandlerReturnValue = any;
 
 export interface EventType {
-    eventArguments: GenericEventArguments;
+    triggerArguments: GenericEventArguments;
     handlerArguments: GenericEventArguments;
     handlerReturnType: GenericEventHandlerReturnValue;
 }
 
 export type EventDefinition<
-    P = GenericEventArguments,
+    P extends GenericEventArguments = GenericEventArguments,
     R = GenericEventHandlerReturnValue,
-    O = P,
+    O extends GenericEventArguments = P,
 > = {
-    eventArguments: P;
+    triggerArguments: P;
     handlerArguments: O;
     handlerReturnType: R;
 };
 
+export type EventMapDefinition<M = Record<string | symbol, EventType>> = {
+    '*': EventDefinition<any[], any, [string | symbol, ...any[]]>;
+} & M;
+
 export interface EventMap {
-    [key: symbol]: {
+    [key: symbol | string]: {
+        '*': EventDefinition<any[], any, [string | symbol, ...any[]]>;
         [key: string | symbol]: EventType;
     };
 }
 
-export type EventName<Id extends symbol> = string | symbol | keyof EventMap[Id];
+export type EventName<Id extends symbol | string> =
+    | string
+    | symbol
+    | keyof EventMap[Id];
 
 export type GetEventArguments<
-    Id extends symbol,
+    Id extends symbol | string,
     K extends keyof EventMap[Id],
 > = [K] extends [keyof EventMap[Id]]
-    ? EventMap[Id][K]['eventArguments']
+    ? [EventMap[Id][K]['triggerArguments']] extends [undefined]
+        ? GenericEventArguments
+        : EventMap[Id][K]['triggerArguments']
     : GenericEventArguments;
 
 export type GetEventHandlerReturnValue<
-    Id extends symbol,
+    Id extends symbol | string,
     K extends keyof EventMap[Id],
 > = [K] extends [keyof EventMap[Id]]
     ? [EventMap[Id][K]['handlerReturnType']] extends [undefined]
@@ -42,7 +52,7 @@ export type GetEventHandlerReturnValue<
     : GenericEventHandlerReturnValue;
 
 export type GetEventHandlerArguments<
-    Id extends symbol,
+    Id extends symbol | string,
     K extends keyof EventMap[Id],
 > = [K] extends [keyof EventMap[Id]]
     ? [EventMap[Id][K]['handlerArguments']] extends [undefined]
@@ -113,7 +123,7 @@ export type EventSourceSubscriber = (
     name: string | symbol,
     fn: (...args: any[]) => any,
     eventSource: EventSource,
-    options?: ListenerOptions<any[], any>,
+    options?: ListenerOptions<unknown[], unknown>,
 ) => void;
 
 export type EventSourceUnsubscriber = (
@@ -134,7 +144,10 @@ export type EventSource = {
 
 export type WithTagCallback = () => void;
 
-export type ProxyListener = (...args: any) => any | void;
+export type ProxyListener<
+    P extends Array<any> = GenericEventArguments,
+    R = GenericEventHandlerReturnValue,
+> = (...args: P) => R;
 
 export enum ProxyType {
     TRIGGER = 'trigger',
@@ -156,6 +169,22 @@ export enum ProxyType {
     RESOLVE_LAST = 'resolveLast',
     RESOLVE_PIPE = 'resolvePipe',
 }
+
+export type ReturnableProxyType =
+    | ProxyType.RESOLVE_ALL
+    | ProxyType.RESOLVE_MERGE
+    | ProxyType.RESOLVE_CONCAT
+    | ProxyType.RESOLVE_FIRST
+    | ProxyType.RESOLVE_LAST
+    | ProxyType.RESOLVE_FIRST_NON_EMPTY
+    | ProxyType.RESOLVE_PIPE
+    | ProxyType.ALL
+    | ProxyType.MERGE
+    | ProxyType.FIRST
+    | ProxyType.LAST
+    | ProxyType.CONCAT
+    | ProxyType.PIPE
+    | ProxyType.RAW;
 
 type BaseEventOptions<
     P extends GenericEventArguments,
@@ -266,7 +295,7 @@ export type Listener<
 };
 
 export type ObservableApiOn<
-    Id extends symbol,
+    Id extends symbol | string,
     K extends keyof EventMap[Id] = string,
 > = (
     name: K,
@@ -282,7 +311,7 @@ export type ObservableApiOn<
 ) => void;
 
 export type ObservableApiOnce<
-    Id extends symbol,
+    Id extends symbol | string,
     K extends keyof EventMap[Id] = string,
 > = (
     name: K,
@@ -298,7 +327,7 @@ export type ObservableApiOnce<
 ) => void;
 
 export type ObservableApiUn<
-    Id extends symbol,
+    Id extends symbol | string,
     K extends keyof EventMap[Id] = string,
 > = (
     name: K,
@@ -310,7 +339,7 @@ export type ObservableApiUn<
 ) => void;
 
 export type ObservableApiHas<
-    Id extends symbol,
+    Id extends symbol | string,
     K extends keyof EventMap[Id] = string,
 > = (
     name?: string,
@@ -321,7 +350,7 @@ export type ObservableApiHas<
     context?: object,
 ) => boolean;
 
-export type ObservablePubliApi<Id extends symbol> = {
+export type ObservablePubliApi<Id extends symbol | string> = {
     on: ObservableApiOn<Id>;
     un: ObservableApiUn<Id>;
     once: ObservableApiOnce<Id>;

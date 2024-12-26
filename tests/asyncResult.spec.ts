@@ -4,6 +4,7 @@ import util from './util';
 
 type Opt = {
     triggered: boolean;
+    eventName?: string | symbol;
 };
 
 const l1 = (val?) => {
@@ -24,6 +25,14 @@ const l3 = (resolver) => {
         return new Promise(function (resolve) {
             resolve(resolver(value));
         });
+    };
+};
+
+const l4 = (val, opt: Opt) => {
+    return (eventName: string | symbol) => {
+        opt.triggered = true;
+        opt.eventName = eventName;
+        return util.getPromise(val);
     };
 };
 
@@ -219,13 +228,20 @@ describe('Observable', function () {
 
         it('resolve *', function (done) {
             const o = new Observable();
-            const opt: Opt = { triggered: false };
+            const opt: Opt = { triggered: false, eventName: '' };
             o.on('*', l1(1));
-            o.on('*', l2(2, opt));
+            o.on('*', l4(2, opt));
             o.resolveFirst('non-existent-event')
                 .then((res) => {
-                    assert.equal(1, res);
-                    assert(opt.triggered === false);
+                    assert.equal(undefined, res);
+                    assert(
+                        opt.triggered === true,
+                        '* handler should be triggered',
+                    );
+                    assert(
+                        opt.eventName === 'non-existent-event',
+                        '* handler should be triggered with event name',
+                    );
                     done();
                 })
                 .catch(function (reason) {
