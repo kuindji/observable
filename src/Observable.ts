@@ -356,51 +356,6 @@ export default class Observable<Id extends symbol | string = any> {
      * @param name Event name in this observable
      * @param proxyType
      */
-    // proxy<K extends EventName<Id>>(
-    //     name: K,
-    //     proxyType?:
-    //         | ProxyType.TRIGGER
-    //         | ProxyType.UNTIL_FALSE
-    //         | ProxyType.UNTIL_TRUE,
-    // ): ProxyListener<GetEventArguments<Id, K>, void>;
-    // proxy<K extends EventName<Id>>(
-    //     name: K,
-    //     proxyType:
-    //         | ProxyType.FIRST
-    //         | ProxyType.LAST
-    //         | ProxyType.FIRST_NON_EMPTY
-    //         | ProxyType.PIPE
-    //         | ProxyType.MERGE,
-    // ): ProxyListener<
-    //     GetEventArguments<Id, K>,
-    //     GetEventHandlerReturnValue<Id, K> | undefined
-    // >;
-    // proxy<K extends EventName<Id>>(
-    //     name: K,
-    //     proxyType:
-    //         | ProxyType.RESOLVE_FIRST
-    //         | ProxyType.RESOLVE_LAST
-    //         | ProxyType.RESOLVE_FIRST_NON_EMPTY
-    //         | ProxyType.RESOLVE_PIPE
-    //         | ProxyType.RESOLVE_MERGE,
-    // ): ProxyListener<
-    //     GetEventArguments<Id, K>,
-    //     Promise<GetEventHandlerReturnValue<Id, K> | undefined>
-    // >;
-    // proxy<K extends EventName<Id>>(
-    //     name: K,
-    //     proxyType: ProxyType.ALL | ProxyType.CONCAT | ProxyType.RAW,
-    // ): ProxyListener<
-    //     GetEventArguments<Id, K>,
-    //     Array<GetEventHandlerReturnValue<Id, K>>
-    // >;
-    // proxy<K extends EventName<Id>>(
-    //     name: K,
-    //     proxyType: ProxyType.RESOLVE_ALL | ProxyType.RESOLVE_CONCAT,
-    // ): ProxyListener<
-    //     GetEventArguments<Id, K>,
-    //     Promise<Array<GetEventHandlerReturnValue<Id, K>>>
-    // >;
     proxy<K extends EventName<Id>>(
         name: K,
         proxyType?: ProxyType,
