@@ -5,6 +5,7 @@
         "noImplicitAny": false,
         "declaration": true,
         "strict": true,
+        "allowJs": false,
         "module": "commonjs",
         "target": "es5",
         "lib": [
@@ -16,10 +17,10 @@
         ]
     },
     "include": [
-        "src/**/*",
-        "tests/**/*"
+        "./src/**/*",
+        "./tests/**/*"
     ],
     "exclude": [
-        "dist"
+        "./dist/**/*"
     ]
 }

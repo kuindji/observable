@@ -4,8 +4,9 @@
       "module": "commonjs",
       "declaration": true,
       "outDir": "./dist",
-      "strict": true
+      "strict": true,
+      "allowJs": false,
     },
-    "include": ["src/**/*"],
-    "exclude": ["node_modules", "tests"]
+    "include": ["./src/**/*"],
+    "exclude": ["./node_modules/**/*", "./tests/**/*", "./dist/**/*"]
   }

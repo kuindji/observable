@@ -8,7 +8,7 @@
         "dist/**/*"
     ],
     "scripts": {
-        "build": "tsc -p tsconfig-build.json",
+        "build": "tsc -p ./tsconfig-build.json",
         "format": "prettier --write \"src/**/*.ts\" \"src/**/*.js\"",
         "lint": "tslint -p tsconfig-build.json",
         "test": "npx ts-mocha -p tsconfig.json tests/**/*.spec.ts"
@@ -36,7 +36,7 @@
         "prettier": "^2.8.0",
         "sinon": "^15.2.0",
         "ts-mocha": "^10.0.0",
-        "typescript": "^5.1.6",
+        "typescript": "^5",
         "events": "^3.3.0"
     }
 }

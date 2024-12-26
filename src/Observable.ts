@@ -1,37 +1,44 @@
-import ObservableEvent from "./ObservableEvent"
-import { ObservablePubliApi, 
-            ReturnType, 
-            EventOptions, 
-            ListenerOptions, 
-            ListenerFunction, 
-            ReturnValue,
-            EventSource,
-            ProxyType,
-            ProxyListener, 
-            InterceptorFunction,
-            WithTagCallback} from "./types"
+import ObservableEvent from './ObservableEvent';
+import {
+    ObservablePubliApi,
+    TriggerReturnType,
+    EventOptions,
+    ListenerOptions,
+    ListenerFunction,
+    TriggerReturnValue,
+    EventSource,
+    ProxyType,
+    ProxyListener,
+    InterceptorFunction,
+    WithTagCallback,
+    EventMap,
+    GetEventArguments,
+    GetEventHandlerReturnValue,
+    EventName,
+    GetEventHandlerArguments,
+} from './types';
 
-type EventsMap = {
-    [key: string]: ObservableEvent
-}
+type EventStore<Id extends symbol> = Record<
+    keyof EventMap[Id] | string | symbol,
+    ObservableEvent
+>;
 
 type ProxyListenerMap = {
-    [key: string]: ProxyListener
-}
+    [key: string]: ProxyListener;
+};
 
 /**
- * A javascript event bus implementing multiple patterns: 
+ * A javascript event bus implementing multiple patterns:
  * observable, collector and pipe.
  * @author Ivan Kuindzhi
  */
-export default class Observable {
-
-    events: EventsMap = {}
-    external: ProxyListenerMap = {}
-    eventSources: EventSource[] = []
-    publicApi: ObservablePubliApi | null = null
-    interceptor: InterceptorFunction | null = null
-    _tags?: string[] | null = null
+export default class Observable<Id extends symbol = any> {
+    events: EventStore<Id> = {} as EventStore<Id>;
+    external: ProxyListenerMap = {};
+    eventSources: EventSource[] = [];
+    publicApi: ObservablePubliApi<Id> | null = null;
+    interceptor: InterceptorFunction | null = null;
+    _tags?: string[] | null = null;
 
     withTags(tags: string[], fn: WithTagCallback) {
         this._tags = tags;
@@ -40,52 +47,108 @@ export default class Observable {
     }
 
     /**
-     * Use this method only if you need to provide event-level options
+     * @param name
+     * @param options
+     * @deprecated
+     */
+    createEvent<K extends EventName<Id>>(
+        name: K,
+        options?: EventOptions<
+            GetEventArguments<Id, K>,
+            GetEventHandlerReturnValue<Id, K>
+        >,
+    ): void {
+        this.setEventOptions(name, options);
+    }
+
+    /**
+     * Use this method only if you need to provide event-level options or listener argument types.
      * @param name Event name
      * @param options Event options
      */
-    createEvent(name: string, options?: EventOptions): void {
-        const events  = this.events;
-        if (!events[name]) {
-            events[name] = new ObservableEvent(options);
+    setEventOptions<K extends EventName<Id>>(
+        name: K,
+        options?: EventOptions<
+            GetEventArguments<Id, K>,
+            GetEventHandlerReturnValue<Id, K>
+        >,
+    ): void {
+        if (!this.events[name]) {
+            this.events[name] = new ObservableEvent<
+                GetEventArguments<Id, K>,
+                GetEventHandlerReturnValue<Id, K>
+            >(options);
         }
     }
 
     /**
-    * Subscribe to an event or register collector function.
-    * @param name Event name. Use '*' to subscribe to all events.
-    * @param fn Callback function
-    * @param options You can pass any key-value pairs in this object. All of them will be passed 
-    *       to triggerFilter (if you're using one).
-    */
-    on(name: string, fn: ListenerFunction, options?: ListenerOptions): void {
-
+     * Subscribe to an event or register collector function.
+     * @param name Event name. Use '*' to subscribe to all events.
+     * @param fn Callback function
+     * @param options You can pass any key-value pairs in this object. All of them will be passed
+     *       to triggerFilter (if you're using one).
+     */
+    on<K extends EventName<Id>>(
+        name: K,
+        fn: ListenerFunction<
+            GetEventArguments<Id, K>,
+            GetEventHandlerReturnValue<Id, K>
+        >,
+        options?: ListenerOptions<
+            GetEventArguments<Id, K>,
+            GetEventHandlerReturnValue<Id, K>
+        >,
+    ): void {
         if (this.eventSources.length > 0) {
             this.eventSources.forEach((evs: EventSource) => {
-                if (evs.accepts === false || (typeof evs.accepts === "function" && !evs.accepts(name))) {
+                if (
+                    evs.accepts === false ||
+                    (typeof evs.accepts === 'function' &&
+                        !evs.accepts(name as string | symbol))
+                ) {
                     return;
                 }
                 if (evs.subscribed.indexOf(name) === -1) {
-                    evs.on(name, this.proxy(name, evs.proxyType), evs, options);
+                    evs.on(
+                        name as string | symbol,
+                        this.proxy(name as string | symbol, evs.proxyType),
+                        evs,
+                        options,
+                    );
                     evs.subscribed.push(name);
                 }
             });
         }
-        
-        const events  = this.events;
-        if (!events[name]) {
-            events[name] = new ObservableEvent();
+
+        const events = this.events;
+        if (events[name] === undefined) {
+            events[name] = new ObservableEvent<
+                GetEventArguments<Id, K>,
+                GetEventHandlerReturnValue<Id, K>,
+                GetEventHandlerArguments<Id, K>
+            >();
         }
         events[name].on(fn, options);
     }
 
     /**
-    * Same as <code>on()</code>, but options.limit is forcefully set to 1.
-    * @param name Event name
-    * @param fn Listener
-    * @param options? listener options
-    */
-    once(name: string, fn: ListenerFunction, options?: ListenerOptions): void {
+     * Same as <code>on()</code>, but options.limit is forcefully set to 1.
+     * @param name Event name
+     * @param fn Listener
+     * @param options? listener options
+     */
+    once<K extends EventName<Id>>(
+        name: K,
+        fn: ListenerFunction<
+            GetEventHandlerArguments<Id, K>,
+            GetEventHandlerReturnValue<Id, K>
+        >,
+        options?: ListenerOptions<
+            GetEventArguments<Id, K>,
+            GetEventHandlerReturnValue<Id, K>,
+            GetEventHandlerArguments<Id, K>
+        >,
+    ): void {
         options = options || {};
         options.limit = 1;
         this.on(name, fn, options);
@@ -96,15 +159,28 @@ export default class Observable {
      * @param name Event name
      * @param options?
      */
-    promise(name: string, options?: ListenerOptions): Promise<any> {
+    promise<K extends EventName<Id>>(
+        name: K,
+        options?: ListenerOptions<
+            GetEventArguments<Id, K>,
+            GetEventHandlerReturnValue<Id, K>,
+            GetEventHandlerArguments<Id, K>
+        >,
+    ): Promise<GetEventHandlerArguments<Id, K>> {
         return new Promise((resolve) => {
-            this.once(name, resolve, options);
+            this.once(
+                name,
+                (...args: GetEventHandlerArguments<Id, K>): any => {
+                    resolve(args);
+                },
+                options,
+            );
         });
     }
 
     /**
      * Intercept all triggers and return boolean to allow or disallow event call
-     * @param fn 
+     * @param fn
      */
     intercept(fn: InterceptorFunction) {
         this.interceptor = fn;
@@ -118,14 +194,22 @@ export default class Observable {
     }
 
     /**
-    * Unsubscribe from an event
-    * @param name Event name
-    * @param fn Event handler
-    * @param context If you called on() with context you must 
-    *                         call un() with the same context
-    */
-    un(name: string, fn: ListenerFunction, context?: object | null, tag?: string): void {
-        const events  = this.events;
+     * Unsubscribe from an event
+     * @param name Event name
+     * @param fn Event handler
+     * @param context If you called on() with context you must
+     *                         call un() with the same context
+     */
+    un<K extends EventName<Id>>(
+        name: K,
+        fn: ListenerFunction<
+            GetEventHandlerArguments<Id, K>,
+            GetEventHandlerReturnValue<Id, K>
+        >,
+        context?: object | null,
+        tag?: string,
+    ): void {
+        const events = this.events;
         if (!events[name]) {
             return;
         }
@@ -135,11 +219,11 @@ export default class Observable {
             const empty = !events[name].hasListener();
             this.eventSources.forEach((evs: EventSource) => {
                 const inx = evs.subscribed.indexOf(name);
-                const key = name + "-" + evs.proxyType;
+                const key = (name as string) + '-' + evs.proxyType;
                 if (inx !== -1) {
                     evs.subscribed.splice(inx, 1);
                     if (empty) {
-                        evs.un(name, this.external[key], evs, tag);
+                        evs.un(name as string, this.external[key], evs, tag);
                     }
                 }
             });
@@ -148,27 +232,33 @@ export default class Observable {
 
     /**
      * Relay all events of <code>eventSource</code> through this observable.
-     * @param eventSource
+     * @param eventSource another Observable
      * @param eventName
      * @param triggerName
      * @param triggerNamePfx prefix all relayed event names
      * @param proxyType
      */
-    relay(eventSource: Observable, eventName: string, 
-                triggerName?: string | null, triggerNamePfx?: string | null,
-                proxyType: ProxyType = ProxyType.TRIGGER) {
+    relay(
+        eventSource: Observable,
+        eventName: string,
+        triggerName?: string | null,
+        triggerNamePfx?: string | null,
+        proxyType: ProxyType = ProxyType.TRIGGER,
+    ) {
         eventSource.on(eventName, this[proxyType], {
             context: this,
-            prependArgs: eventName === "*" ? 
-                        undefined: 
-                        // use provided new event name or original name
-                        [triggerName || eventName],
-            replaceArgs: eventName === "*" && triggerNamePfx ? 
-                            function(l, args) {
-                                args[0] = triggerNamePfx + args[0]
-                                return args;
-                            } : 
-                            undefined
+            prependArgs:
+                eventName === '*'
+                    ? undefined
+                    : // use provided new event name or original name
+                      [triggerName || eventName],
+            replaceArgs:
+                eventName === '*' && triggerNamePfx
+                    ? function (l, args) {
+                          args[0] = triggerNamePfx + args[0];
+                          return args;
+                      }
+                    : undefined,
         });
     }
 
@@ -177,19 +267,23 @@ export default class Observable {
      * @param eventSource
      * @param eventName
      */
-    unrelay(eventSource: Observable, eventName: string) {
-        eventSource.un(eventName, this.trigger, this);
+    unrelay(
+        eventSource: Observable,
+        eventName: string | symbol,
+        proxyType: ProxyType = ProxyType.TRIGGER,
+    ) {
+        eventSource.un(eventName, this[proxyType], this);
     }
 
     /**
-     * @param eventSource 
+     * @param eventSource
      */
     addEventSource(eventSource: EventSource): void {
         if (!this.hasEventSource(eventSource.name)) {
-            this.eventSources.push({ 
+            this.eventSources.push({
                 proxyType: ProxyType.TRIGGER,
-                ...eventSource, 
-                subscribed: [] 
+                ...eventSource,
+                subscribed: [],
             });
         }
     }
@@ -198,26 +292,30 @@ export default class Observable {
      * @param name  eventSource name or eventSource
      */
     removeEventSource(name: string | EventSource) {
-        const inx = this.eventSources.findIndex(
-            evs => typeof name === "string" ? evs.name === name : evs.name === name.name
+        const inx = this.eventSources.findIndex((evs) =>
+            typeof name === 'string'
+                ? evs.name === name
+                : evs.name === name.name,
         );
         if (inx !== -1) {
             const evs = this.eventSources[inx];
             evs.subscribed.forEach((name: string) => {
-                const key = name + "-" + evs.proxyType;
+                const key = name + '-' + evs.proxyType;
                 evs.un(name, this.external[key], evs);
-            })
+            });
             this.eventSources.splice(inx, 1);
         }
     }
 
     /**
      * Check if event source with given name was added
-     * @param name 
+     * @param name
      */
-    hasEventSource(name: string | EventSource): boolean {
-        const inx = this.eventSources.findIndex(
-            evs => typeof name === "string" ? evs.name === name : evs.name === name.name
+    hasEventSource(name: string | symbol | EventSource): boolean {
+        const inx = this.eventSources.findIndex((evs) =>
+            typeof name === 'string' || typeof name === 'symbol'
+                ? evs.name === name
+                : evs.name === name.name,
         );
         return inx !== -1;
     }
@@ -226,14 +324,20 @@ export default class Observable {
      * Create a listener function for external event bus that will relay events through
      * this observable
      * @param name Event name in this observable
-     * @param proxyType 
+     * @param proxyType
      */
-    proxy(name: string, proxyType: ProxyType = ProxyType.TRIGGER): ProxyListener {
-        const key = name + "-" + proxyType;
+    proxy(
+        name: string | symbol,
+        proxyType: ProxyType = ProxyType.TRIGGER,
+    ): ProxyListener {
+        const key = (name as string) + '-' + proxyType;
         if (!this.external[key]) {
             this.external[key] = (...args) => {
-                const res = this[proxyType].apply(this, [ name, ...args ]);
-                if (proxyType !== "trigger") {
+                const res = this[proxyType].apply(this, [
+                    name as string | symbol,
+                    ...args,
+                ]);
+                if (proxyType !== ProxyType.TRIGGER) {
                     return res;
                 }
             };
@@ -242,11 +346,19 @@ export default class Observable {
     }
 
     /**
-    * @param name Event name 
-    * @param fn Callback function 
-    * @param context
-    */
-    has(name?: string | null, fn?: ListenerFunction | null, context?: object | null, tag?: string): boolean {
+     * @param name Event name
+     * @param fn Callback function
+     * @param context
+     */
+    has<K extends EventName<Id>>(
+        name?: K,
+        fn?: ListenerFunction<
+            GetEventHandlerArguments<Id, K>,
+            GetEventHandlerReturnValue<Id, K>
+        > | null,
+        context?: object | null,
+        tag?: string,
+    ): boolean {
         const events = this.events;
 
         if (name) {
@@ -254,10 +366,9 @@ export default class Observable {
                 return false;
             }
             return events[name].hasListener(fn, context, tag);
-        }
-        else {
-            for (name in events) {
-                if (events[name].hasListener(undefined, undefined, tag)) {
+        } else {
+            for (const eventName in events) {
+                if (events[eventName].hasListener(undefined, undefined, tag)) {
                     return true;
                 }
             }
@@ -268,30 +379,36 @@ export default class Observable {
     /**
      * @deprecated
      * Same as has()
-     * @param name 
-     * @param fn 
-     * @param context 
+     * @param name
+     * @param fn
+     * @param context
      */
-    hasListener(name?: string | null, fn?: ListenerFunction | null, context?: object | null, tag?: string): boolean {
+    hasListener<K extends EventName<Id>>(
+        name?: K,
+        fn?: ListenerFunction<
+            GetEventHandlerArguments<Id, K>,
+            GetEventHandlerReturnValue<Id, K>
+        > | null,
+        context?: object | null,
+        tag?: string,
+    ): boolean {
         return this.has(name, fn, context, tag);
     }
 
-
     /**
-    * Remove all listeners from specific event or from all events
-    * @param name Event name
-    */
-    removeAllListeners(name: string, tag?: string) {
-        const events  = this.events;
+     * Remove all listeners from specific event or from all events
+     * @param name Event name
+     */
+    removeAllListeners<K extends EventName<Id>>(name?: K, tag?: string) {
+        const events = this.events;
         if (name) {
             if (!events[name]) {
                 return;
             }
             events[name].removeAllListeners(tag);
-        }
-        else {
-            for (name in events) {
-                events[name].removeAllListeners(tag);
+        } else {
+            for (const eventName in events) {
+                events[eventName].removeAllListeners(tag);
             }
         }
     }
@@ -301,8 +418,13 @@ export default class Observable {
      * @param name Event name
      * @param [...args]
      */
-    all(name: string, ...args: any[]): any[] | Promise<any[]> {
-        return this._trigger(name, args, ReturnType.ALL);
+    all<K extends EventName<Id>>(
+        name: K,
+        ...args: any[]
+    ):
+        | Array<GetEventHandlerReturnValue<Id, K>>
+        | Promise<Array<GetEventHandlerReturnValue<Id, K>>> {
+        return this._trigger(name, args, TriggerReturnType.ALL);
     }
 
     /**
@@ -310,8 +432,11 @@ export default class Observable {
      * @param name Event name
      * @param [...args]
      */
-    resolveAll(name: string, ...args: any[]): Promise<any[]> {
-        return this._trigger(name, args, ReturnType.ALL, true);
+    resolveAll<K extends EventName<Id>>(
+        name: K,
+        ...args: any[]
+    ): Promise<Array<GetEventHandlerReturnValue<Id, K>>> {
+        return this._trigger(name, args, TriggerReturnType.ALL, true);
     }
 
     /**
@@ -319,8 +444,13 @@ export default class Observable {
      * @param name Event name
      * @param [...args]
      */
-    first(name: string, ...args: any[]): any | Promise<any> {
-        return this._trigger(name, args, ReturnType.FIRST);
+    first<K extends EventName<Id>>(
+        name: K,
+        ...args: any[]
+    ):
+        | GetEventHandlerReturnValue<Id, K>
+        | Promise<GetEventHandlerReturnValue<Id, K>> {
+        return this._trigger(name, args, TriggerReturnType.FIRST);
     }
 
     /**
@@ -328,8 +458,11 @@ export default class Observable {
      * @param name Event name
      * @param [...args]
      */
-    resolveFirst(name: string, ...args: any[]): Promise<any> {
-        return this._trigger(name, args, ReturnType.FIRST, true);
+    resolveFirst<K extends EventName<Id>>(
+        name: K,
+        ...args: any[]
+    ): Promise<GetEventHandlerReturnValue<Id, K>> {
+        return this._trigger(name, args, TriggerReturnType.FIRST, true);
     }
 
     /**
@@ -337,8 +470,13 @@ export default class Observable {
      * @param name Event name
      * @param [...args]
      */
-    last(name: string, ...args: any[]): any | Promise<any> {
-        return this._trigger(name, args, ReturnType.LAST);
+    last<K extends EventName<Id>>(
+        name: K,
+        ...args: any[]
+    ):
+        | GetEventHandlerReturnValue<Id, K>
+        | Promise<GetEventHandlerReturnValue<Id, K>> {
+        return this._trigger(name, args, TriggerReturnType.LAST);
     }
 
     /**
@@ -346,8 +484,11 @@ export default class Observable {
      * @param name Event name
      * @param [...args]
      */
-    resolveLast(name: string, ...args: any[]): Promise<any> {
-        return this._trigger(name, args, ReturnType.LAST, true);
+    resolveLast<K extends EventName<Id>>(
+        name: K,
+        ...args: any[]
+    ): Promise<GetEventHandlerReturnValue<Id, K>> {
+        return this._trigger(name, args, TriggerReturnType.LAST, true);
     }
 
     /**
@@ -355,8 +496,13 @@ export default class Observable {
      * @param name Event name
      * @param [...args]
      */
-    merge(name: string, ...args: any[]): object | Promise<object> {
-        return this._trigger(name, args, ReturnType.MERGE);
+    merge<K extends EventName<Id>>(
+        name: K,
+        ...args: any[]
+    ):
+        | GetEventHandlerReturnValue<Id, K>
+        | Promise<GetEventHandlerReturnValue<Id, K>> {
+        return this._trigger(name, args, TriggerReturnType.MERGE);
     }
 
     /**
@@ -364,8 +510,11 @@ export default class Observable {
      * @param name Event name
      * @param [...args]
      */
-    resolveMerge(name: string, ...args: any[]): Promise<object> {
-        return this._trigger(name, args, ReturnType.MERGE, true);
+    resolveMerge<K extends EventName<Id>>(
+        name: K,
+        ...args: any[]
+    ): Promise<GetEventHandlerReturnValue<Id, K>> {
+        return this._trigger(name, args, TriggerReturnType.MERGE, true);
     }
 
     /**
@@ -373,8 +522,14 @@ export default class Observable {
      * @param name Event name
      * @param [...args]
      */
-    concat(name: string, ...args: any[]): any[] | Promise<any[]> {
-        return this._trigger(name, args, ReturnType.CONCAT);
+    concat<K extends EventName<Id>>(
+        name: K,
+        ...args: any[]
+    ): Array<
+        | GetEventHandlerReturnValue<Id, K>
+        | Promise<GetEventHandlerReturnValue<Id, K>>
+    > {
+        return this._trigger(name, args, TriggerReturnType.CONCAT);
     }
 
     /**
@@ -382,8 +537,11 @@ export default class Observable {
      * @param name Event name
      * @param [...args]
      */
-    resolveConcat(name: string, ...args: any[]): Promise<any[]> {
-        return this._trigger(name, args, ReturnType.CONCAT, true);
+    resolveConcat<K extends EventName<Id>>(
+        name: K,
+        ...args: any[]
+    ): Promise<Array<GetEventHandlerReturnValue<Id, K>>> {
+        return this._trigger(name, args, TriggerReturnType.CONCAT, true);
     }
 
     /**
@@ -391,8 +549,13 @@ export default class Observable {
      * @param name Event name
      * @param [...args]
      */
-    firstNonEmpty(name: string, ...args: any[]): any | Promise<any> {
-        return this._trigger(name, args, ReturnType.FIRST_NON_EMPTY);
+    firstNonEmpty<K extends EventName<Id>>(
+        name: K,
+        ...args: any[]
+    ):
+        | GetEventHandlerReturnValue<Id, K>
+        | Promise<GetEventHandlerReturnValue<Id, K>> {
+        return this._trigger(name, args, TriggerReturnType.FIRST_NON_EMPTY);
     }
 
     /**
@@ -400,8 +563,16 @@ export default class Observable {
      * @param name Event name
      * @param [...args]
      */
-    resolveFirstNonEmpty(name: string, ...args: any[]): Promise<any> {
-        return this._trigger(name, args, ReturnType.FIRST_NON_EMPTY, true);
+    resolveFirstNonEmpty<K extends EventName<Id>>(
+        name: K,
+        ...args: any[]
+    ): Promise<GetEventHandlerReturnValue<Id, K>> | Promise<undefined> {
+        return this._trigger(
+            name,
+            args,
+            TriggerReturnType.FIRST_NON_EMPTY,
+            true,
+        );
     }
 
     /**
@@ -409,8 +580,8 @@ export default class Observable {
      * @param name Event name
      * @param [...args]
      */
-    untilTrue(name: string, ...args: any[]): void | Promise<void> {
-        return this._trigger(name, args, ReturnType.UNTIL_TRUE);
+    untilTrue<K extends EventName<Id>>(name: K, ...args: any[]): void {
+        this._trigger(name, args, TriggerReturnType.UNTIL_TRUE);
     }
 
     /**
@@ -418,8 +589,8 @@ export default class Observable {
      * @param name Event name
      * @param [...args]
      */
-    untilFalse(name: string, ...args: any[]): void | Promise<void> {
-        return this._trigger(name, args, ReturnType.UNTIL_FALSE);
+    untilFalse<K extends EventName<Id>>(name: K, ...args: any[]): void {
+        this._trigger(name, args, TriggerReturnType.UNTIL_FALSE);
     }
 
     /**
@@ -427,18 +598,21 @@ export default class Observable {
      * @param name Event name
      * @param [...args]
      */
-    pipe(name: string, ...args: any[]): any | Promise<any> {
-        return this._trigger(name, args, ReturnType.PIPE);
+    pipe<K extends EventName<Id>>(name: K, ...args: any[]): any | Promise<any> {
+        return this._trigger(name, args, TriggerReturnType.PIPE);
     }
 
     /**
-     * Trigger event and pass previous listener's return value into next listener and return 
+     * Trigger event and pass previous listener's return value into next listener and return
      * last result as promise
      * @param name Event name
      * @param [...args]
      */
-    resolvePipe(name: string, ...args: any[]): Promise<any> {
-        return this._trigger(name, args, ReturnType.PIPE, true);
+    resolvePipe<K extends EventName<Id>>(
+        name: K,
+        ...args: any[]
+    ): TriggerReturnValue<GetEventHandlerReturnValue<Id, K>> {
+        return this._trigger(name, args, TriggerReturnType.PIPE, true);
     }
 
     /**
@@ -446,23 +620,111 @@ export default class Observable {
      * @param name Event name
      * @param [...args]
      */
-    raw(name: string, ...args: any[]): any[] | Promise<any>[] {
-        return this._trigger(name, args, ReturnType.RAW);
+    raw<K extends EventName<Id>>(
+        name: K,
+        ...args: any[]
+    ):
+        | Array<GetEventHandlerReturnValue<Id, K>>
+        | Promise<Array<GetEventHandlerReturnValue<Id, K>>> {
+        return this._trigger(name, args, TriggerReturnType.RAW);
     }
 
     /**
      * Trigger all listeners of the event, do not return anything
-     * @param name 
+     * @param name
      * @param [...args]
      */
-    trigger(name: string, ...args: any[]): void | Promise<void> {
-        return this._trigger(name, args);
+    trigger<K extends EventName<Id>>(name: K, ...args: any[]): void {
+        this._trigger(name, args, undefined, undefined);
     }
 
-    _trigger(name: string, args: any[], returnType: ReturnType | null = null, resolve: boolean = false): ReturnValue {
+    _trigger<K extends EventName<Id>>(
+        name: K,
+        args: GetEventHandlerArguments<Id, K>,
+        returnType:
+            | TriggerReturnType.ALL
+            | TriggerReturnType.CONCAT
+            | TriggerReturnType.RAW,
+        resolve?: false,
+    ): Array<
+        | GetEventHandlerReturnValue<Id, K>
+        | Promise<GetEventHandlerReturnValue<Id, K>>
+    >;
 
+    _trigger<K extends EventName<Id>>(
+        name: K,
+        args: GetEventHandlerArguments<Id, K>,
+        returnType:
+            | TriggerReturnType.ALL
+            | TriggerReturnType.CONCAT
+            | TriggerReturnType.RAW,
+        resolve: true,
+    ): Promise<Array<GetEventHandlerReturnValue<Id, K>>>;
+
+    _trigger<K extends EventName<Id>>(
+        name: K,
+        args: GetEventHandlerArguments<Id, K>,
+        returnType:
+            | TriggerReturnType.FIRST
+            | TriggerReturnType.LAST
+            | TriggerReturnType.FIRST_NON_EMPTY
+            | TriggerReturnType.PIPE
+            | TriggerReturnType.MERGE,
+        resolve?: false,
+    ):
+        | GetEventHandlerReturnValue<Id, K>
+        | Promise<GetEventHandlerReturnValue<Id, K>>
+        | undefined;
+
+    _trigger<K extends EventName<Id>>(
+        name: K,
+        args: GetEventHandlerArguments<Id, K>,
+        returnType:
+            | TriggerReturnType.FIRST
+            | TriggerReturnType.LAST
+            | TriggerReturnType.FIRST_NON_EMPTY
+            | TriggerReturnType.PIPE
+            | TriggerReturnType.MERGE,
+        resolve: true,
+    ): Promise<GetEventHandlerReturnValue<Id, K> | undefined>;
+
+    _trigger<K extends EventName<Id>>(
+        name: K,
+        args: GetEventHandlerArguments<Id, K>,
+        returnType:
+            | TriggerReturnType.UNTIL_FALSE
+            | TriggerReturnType.UNTIL_TRUE
+            | undefined
+            | null,
+        resolve?: false,
+    ): void;
+
+    _trigger<K extends EventName<Id>>(
+        name: K,
+        args: GetEventHandlerArguments<Id, K>,
+        returnType:
+            | TriggerReturnType.UNTIL_FALSE
+            | TriggerReturnType.UNTIL_TRUE
+            | undefined
+            | null,
+        resolve: true,
+    ): Promise<void>;
+
+    _trigger<K extends EventName<Id>>(
+        name: K,
+        args?: GetEventHandlerArguments<Id, K>,
+        returnType?: TriggerReturnType | null,
+        resolve?: boolean,
+    ): TriggerReturnValue<GetEventHandlerReturnValue<Id, K>> {
         if (this.interceptor) {
-            if (this.interceptor(name, args, returnType, this._tags) !== true) {
+            if (
+                this.interceptor(
+                    name as string | symbol,
+                    args || [],
+                    returnType,
+                    this._tags,
+                ) !== true
+            ) {
                 return undefined;
             }
         }
@@ -470,29 +732,29 @@ export default class Observable {
         const events = this.events;
         let e: ObservableEvent;
 
-        if (e = events[name]) {
-            return resolve ? 
-                    e.resolve(args, returnType, this._tags) : 
-                    e.trigger(args, returnType, this._tags);
+        if ((e = events[name])) {
+            return resolve
+                ? e.resolve(args || [], returnType, this._tags)
+                : e.trigger(args || [], returnType, this._tags);
         }
 
         // trigger * event with current event name
         // as first argument
-        if (e = events["*"]) {
-            return resolve ? 
-                e.resolve([ name, ...args ], returnType, this._tags) : 
-                e.trigger([ name, ...args ], returnType, this._tags);
+        if ((e = events['*'])) {
+            return resolve
+                ? e.resolve([name, ...(args || [])], returnType, this._tags)
+                : e.trigger([name, ...(args || [])], returnType, this._tags);
         }
     }
 
     /**
-    * Suspend an event. Suspended event will not call any listeners on trigger().
-    * If withQueue=true, events will be triggered after resume()
-    * @param name Event name
-    * @param withQueue enable events queue
-    */
-    suspendEvent(name: string, withQueue: boolean = false) {
-        const events  = this.events;
+     * Suspend an event. Suspended event will not call any listeners on trigger().
+     * If withQueue=true, events will be triggered after resume()
+     * @param name Event name
+     * @param withQueue enable events queue
+     */
+    suspendEvent<K extends EventName<Id>>(name: K, withQueue: boolean = false) {
+        const events = this.events;
         if (!events[name]) {
             events[name] = new ObservableEvent();
         }
@@ -503,8 +765,8 @@ export default class Observable {
      * Check if event was suspended
      * @param name Event name
      */
-    isSuspended(name: string): boolean {
-        const events  = this.events;
+    isSuspended<K extends EventName<Id>>(name: K): boolean {
+        const events = this.events;
         if (!events[name]) {
             return false;
         }
@@ -515,8 +777,8 @@ export default class Observable {
      * Check if event was suspended with queue
      * @param name Event name
      */
-    isQueued(name: string): boolean {
-        const events  = this.events;
+    isQueued<K extends EventName<Id>>(name: K): boolean {
+        const events = this.events;
         if (!events[name]) {
             return false;
         }
@@ -527,15 +789,14 @@ export default class Observable {
      * Check if event has queued calls
      * @param name Event name (optional)
      */
-    hasQueue(name?: string): boolean {
+    hasQueue<K extends EventName<Id>>(name?: K): boolean {
         const events = this.events;
         if (name) {
             if (!events[name]) {
                 return false;
             }
             return events[name].queue.length > 0;
-        }
-        else {
+        } else {
             let found = false;
             for (const name in events) {
                 if (events[name].queue.length > 0) {
@@ -547,24 +808,23 @@ export default class Observable {
         }
     }
 
-
     /**
-    * Suspend all events. Suspended event will not call any listeners on trigger().
-    * If withQueue=true, events will be triggered after resume()
-    * @param withQueue enable events queue
-    */
+     * Suspend all events. Suspended event will not call any listeners on trigger().
+     * If withQueue=true, events will be triggered after resume()
+     * @param withQueue enable events queue
+     */
     suspendAllEvents(withQueue: boolean = false) {
-        const events  = this.events;
+        const events = this.events;
         for (const name in events) {
             events[name].suspend(withQueue);
         }
     }
 
     /**
-    * Resume suspended event.
-    * @param name Event name
-    */
-    resumeEvent(name: string) {
+     * Resume suspended event.
+     * @param name Event name
+     */
+    resumeEvent<K extends EventName<Id>>(name: K) {
         if (!this.events[name]) {
             return;
         }
@@ -572,7 +832,7 @@ export default class Observable {
     }
 
     resumeAllEvents() {
-        const events  = this.events;
+        const events = this.events;
         for (const name in events) {
             events[name].resume();
         }
@@ -581,8 +841,8 @@ export default class Observable {
     /**
      * @param name Event name
      */
-    destroyEvent(name: string) {
-        const events  = this.events;
+    destroyEvent<K extends EventName<Id>>(name: K) {
+        const events = this.events;
         if (events[name]) {
             events[name].removeAllListeners();
             events[name].$destroy();
@@ -590,34 +850,34 @@ export default class Observable {
         }
     }
 
-    getPublicApi(): ObservablePubliApi {
+    getPublicApi(): ObservablePubliApi<Id> {
         if (this.publicApi === null) {
             this.publicApi = {
                 on: this.on.bind(this),
                 un: this.un.bind(this),
                 once: this.once.bind(this),
-                has: this.has.bind(this)
-            }
+                has: this.has.bind(this),
+            };
         }
         return this.publicApi;
     }
 
     /**
-    * Destroy observable
-    */
+     * Destroy observable
+     */
     $destroy() {
         const events = this.events;
         const eventSources = this.eventSources;
 
-        eventSources.forEach(ev => this.removeEventSource(ev));
+        eventSources.forEach((ev) => this.removeEventSource(ev));
 
         for (const name in events) {
             this.destroyEvent(name);
         }
 
-        this.events = {};
+        this.events = {} as EventStore<Id>;
         this.external = {};
         this.eventSources = [];
         this.publicApi = null;
     }
-};
+}

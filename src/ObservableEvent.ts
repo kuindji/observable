@@ -1,51 +1,59 @@
-import async from "./lib/async"
-import isPromise from "./lib/isPromise"
-import listenerSorter from "./lib/listenerSorter"
-import { ReturnType } from "./types"
-import { ListenerFunction, ListenerOptions, 
-        Listener, TriggerFilter, ReturnValue,
-        EventOptions, ArgumetsTransformer } from "./types"
-
-function tagsIntersect(t1: string[], t2: string[]): boolean {
-    for (const tag of t1) {
-        if (t2.indexOf(tag) !== -1) {
-            return true;
-        }
-    }
-    return false;
-}
+import async from './lib/async';
+import listenerSorter from './lib/listenerSorter';
+import tagsIntersect from './lib/tagsIntersect';
+import {
+    ListenerFunction,
+    ListenerOptions,
+    Listener,
+    TriggerFilter,
+    TriggerReturnValue,
+    TriggerReturnType,
+    EventOptions,
+    ArgumentsTransformer,
+    ArgumentsAppendTransformer,
+    ArgumentsPrependTransformer,
+    GenericEventArguments,
+    GenericEventHandlerReturnValue,
+} from './types';
 
 /**
  * This class is private - you can't create an event other than via Observable.
  * @private
  */
-export default class ObservableEvent {
+export default class ObservableEvent<
+    P extends GenericEventArguments = Array<any>,
+    R = GenericEventHandlerReturnValue,
+    O extends GenericEventArguments = P,
+> {
+    listeners: Listener<P, R, O>[] = [];
+    queue: Array<[P, TriggerReturnType | null]> = [];
+    suspended: boolean = false;
+    queued: boolean = false;
+    triggered: number = 0;
+    lastTrigger: P | undefined = undefined;
+    sortListeners: boolean = false;
 
-    listeners: Listener[] = []
-    queue: Array<[Array<any>, ReturnType | null]> = []
-    suspended: boolean = false
-    queued: boolean = false
-    triggered: number = 0
-    lastTrigger: any[] | null = null
-    sortListeners: boolean = false
+    async: boolean | number = false;
+    limit: number = 0;
+    autoTrigger: boolean | null = null;
+    filter: TriggerFilter<P, R, O> | null = null;
+    filterContext: object | null = null;
+    appendArgs: ArgumentsAppendTransformer<P, R, O> | null = null;
+    prependArgs: ArgumentsPrependTransformer<P, R, O> | null = null;
+    replaceArgs: ArgumentsTransformer<P, R, O> | null = null;
 
-    async: boolean | number = false
-    limit: number = 0
-    autoTrigger: boolean | null = null
-    filter: TriggerFilter | null = null
-    filterContext: object | null = null
-    appendArgs: ArgumetsTransformer | null = null
-    prependArgs: ArgumetsTransformer | null = null
-    replaceArgs: ArgumetsTransformer | null = null
-
-    constructor(options?: EventOptions) {
+    constructor(options?: EventOptions<P, R, O>) {
         if (options) {
             Object.assign(this, options);
         }
     }
 
+    setOptions(options: EventOptions<P, R, O>) {
+        Object.assign(this, options);
+    }
+
     /**
-     * 
+     *
      */
     $destroy() {
         this.queue = [];
@@ -55,30 +63,34 @@ export default class ObservableEvent {
     }
 
     /**
-     * @param fn Callback function 
-     * @param options 
+     * @param fn Callback function
+     * @param options
      */
-    on(fn: ListenerFunction, options: ListenerOptions = {}): void {
-
+    on(
+        fn: ListenerFunction<O, R>,
+        options: ListenerOptions<P, R, O> = {},
+    ): void {
         if (!fn) {
             return;
         }
 
         const listeners = this.listeners;
 
-        if (listeners.find(l => l.fn === fn && l.context === options.context)) {
+        if (
+            listeners.find((l) => l.fn === fn && l.context === options.context)
+        ) {
             return;
         }
 
-        const listener: Listener = {
-            fn:         fn,
-            context:    undefined,
-            async:      false,
-            called:     0, // how many times the function was triggered
-            limit:      0, // how many times the function is allowed to trigger
-            start:      1, // from which attempt it is allowed to trigger the function
-            count:      0, // how many attempts to trigger the function was made
-            index:      0
+        const listener: Listener<P, R, O> = {
+            fn: fn,
+            context: undefined,
+            async: false,
+            called: 0, // how many times the function was triggered
+            limit: 0, // how many times the function is allowed to trigger
+            start: 1, // from which attempt it is allowed to trigger the function
+            count: 0, // how many attempts to trigger the function was made
+            index: 0,
         };
 
         Object.assign(listener, options);
@@ -88,27 +100,30 @@ export default class ObservableEvent {
         }
         if (options.first === true || options.alwaysFirst === true) {
             listeners.unshift(listener);
-        }
-        else {
+        } else {
             listeners.push(listener);
         }
 
         if (this.sortListeners) {
             this.listeners = listeners
-                                .map((l: Listener, inx: number): Listener => {
-                                    l.index = inx;
-                                    return l;
-                                })
-                                .sort(listenerSorter);
+                .map((l: Listener<P, R, O>, inx: number): Listener<P, R, O> => {
+                    l.index = inx;
+                    return l;
+                })
+                .sort(listenerSorter<P, R, O>);
         }
 
         if (options.alwaysFirst === true || options.alwaysLast === true) {
             this.sortListeners = true;
         }
 
-        if (this.autoTrigger && this.lastTrigger && !this.suspended) {
+        if (
+            this.autoTrigger &&
+            this.lastTrigger !== undefined &&
+            !this.suspended
+        ) {
             const prevFilter = this.filter;
-            this.filter = (args: any[], l?: Listener) => {
+            this.filter = (args: O, l?: Listener<P, R, O>) => {
                 if (l && l.fn === fn) {
                     return prevFilter ? prevFilter(args, l) !== false : true;
                 }
@@ -121,14 +136,17 @@ export default class ObservableEvent {
 
     /**
      * @param fn Callback function
-     * @param context 
+     * @param context
      * @param tag
      * @return boolean
      */
-    un(fn: ListenerFunction, context?: object | null, tag?: string): boolean {
-
+    un(
+        fn: ListenerFunction<O, R>,
+        context?: object | null,
+        tag?: string,
+    ): boolean {
         const listeners = this.listeners;
-        const inx = listeners.findIndex(l => {
+        const inx = listeners.findIndex((l) => {
             if (l.fn !== fn) {
                 return false;
             }
@@ -152,44 +170,51 @@ export default class ObservableEvent {
         return true;
     }
 
-
     /**
      * @param fn Callback function
-     * @param context 
+     * @param context
      * @param tag
      * @return boolean
      */
-    hasListener(fn?: ListenerFunction | null, context?: object | null, tag?: string | null): boolean {
+    hasListener(
+        fn?: ListenerFunction<O, R> | null,
+        context?: object | null,
+        tag?: string | null,
+    ): boolean {
         if (fn) {
-            return this.listeners.findIndex(l => {
-                if (l.fn !== fn) {
-                    return false;
-                }
-                if (context && l.context !== context) {
-                    return false;
-                }
-                if (tag && (!l.tags || l.tags.indexOf(tag) === -1)) {
-                    return false;
-                }
-                return true;
-            }) !== -1;
+            return (
+                this.listeners.findIndex((l) => {
+                    if (l.fn !== fn) {
+                        return false;
+                    }
+                    if (context && l.context !== context) {
+                        return false;
+                    }
+                    if (tag && (!l.tags || l.tags.indexOf(tag) === -1)) {
+                        return false;
+                    }
+                    return true;
+                }) !== -1
+            );
         }
         if (tag) {
-            return this.listeners.findIndex(l => l.tags && l.tags.indexOf(tag) !== -1) !== -1;
-        }
-        else {
+            return (
+                this.listeners.findIndex(
+                    (l) => l.tags && l.tags.indexOf(tag) !== -1,
+                ) !== -1
+            );
+        } else {
             return this.listeners.length > 0;
         }
     }
 
     removeAllListeners(tag?: string) {
         if (tag) {
-            this.listeners = this.listeners.filter(l => {
+            this.listeners = this.listeners.filter((l) => {
                 return !l.tags || l.tags.indexOf(tag) === -1;
             });
-        }
-        else {
-            this.listeners = [];    
+        } else {
+            this.listeners = [];
         }
     }
 
@@ -212,87 +237,112 @@ export default class ObservableEvent {
         }
     }
 
-    getFilterContext(l: Listener) {
+    getFilterContext(l: Listener<P, R, O>): object | undefined {
         return l.filterContext || this.filterContext || l.context;
     }
 
-    prepareArgs(l: Listener, triggerArgs: any[]): any[] {
+    prepareArgs(l: Listener<P, R, O>, triggerArgs: P): O {
+        let outputArgs: O = triggerArgs as unknown as O;
 
-        let args: any[] = triggerArgs;
-        const append: ArgumetsTransformer | null = l.appendArgs || this.appendArgs || null, 
-            prepend: ArgumetsTransformer | null = l.prependArgs || this.prependArgs || null, 
-            repl: ArgumetsTransformer | null = l.replaceArgs || this.replaceArgs || null;
-    
-        if (append || prepend) {    
+        const append: ArgumentsAppendTransformer<P, R, O> | null =
+                l.appendArgs || this.appendArgs || null,
+            prepend: ArgumentsPrependTransformer<P, R, O> | null =
+                l.prependArgs || this.prependArgs || null,
+            repl: ArgumentsTransformer<P, R, O> | null =
+                l.replaceArgs || this.replaceArgs || null;
+
+        if (append || prepend) {
             if (prepend) {
-                if (typeof prepend === "function") {
-                    args = [ ...prepend(l, args), ...args ];
-                }
-                else {
-                    args = [ ...prepend, ...args ];
+                if (typeof prepend === 'function') {
+                    outputArgs = [
+                        ...prepend(l, triggerArgs),
+                        ...outputArgs,
+                    ] as O;
+                } else {
+                    outputArgs = [...prepend, ...outputArgs] as O;
                 }
             }
             if (append) {
-                if (typeof append === "function") {
-                    args = [ ...args, ...append(l, args) ];
+                if (typeof append === 'function') {
+                    outputArgs = [
+                        ...outputArgs,
+                        ...append(l, triggerArgs),
+                    ] as O;
+                } else {
+                    outputArgs = [...outputArgs, ...append] as O;
                 }
-                else {
-                    args = [ ...args, ...append ];
-                }
+            }
+        } else if (repl) {
+            if (typeof repl === 'function') {
+                outputArgs = [...repl(l, triggerArgs)] as O;
+            } else {
+                outputArgs = [...repl] as O;
             }
         }
-        else if (repl) {
-            if (typeof repl === "function") {
-                args = [ ...repl(l, args) ];
-            }
-            else {
-                args = [ ...repl ];
-            }
-        }
-    
-        return args;
+
+        return outputArgs;
     }
 
-    lcall(listener: Listener, args: any[], resolve: null | ((any: any) => void) = null): ReturnValue {
+    lcall(
+        listener: Listener<P, R, O>,
+        args: O,
+        resolve: null | ((any: R) => void) = null,
+    ): TriggerReturnValue<R> | void {
         const isAsync = listener.async !== false ? listener.async : this.async;
-        const result = isAsync !== false ?
-                        /* promise */ async(
-                            listener.fn, 
-                            listener.context, 
-                            args, 
-                            isAsync === true ? 0 : isAsync
-                        ) :
-                        /* value or promise */ listener.fn.apply(listener.context, args);
+        const fn = listener.fn as ListenerFunction<O, R>;
+        const result =
+            isAsync !== false
+                ? /* promise */ async<O, R>(
+                      fn,
+                      listener.context,
+                      args,
+                      isAsync === true ? 0 : isAsync,
+                  )
+                : /* value or promise */ fn.bind(listener.context)(...args);
         if (resolve !== null) {
-            resolve(result);
-        }
-        else {
+            resolve(result as R);
+        } else {
             return result;
         }
     }
 
-    lcallWPrev(listener: Listener, args: any[], prevValue: any, returnType: ReturnType): ReturnValue {
-        if (returnType === ReturnType.PIPE) {
+    lcallWPrev(
+        listener: Listener<P, R, O>,
+        args: O,
+        prevValue: R,
+        returnType: TriggerReturnType,
+    ): TriggerReturnValue<R> {
+        if (returnType === TriggerReturnType.PIPE) {
             args[0] = prevValue;
-            args = this.prepareArgs(listener, args);
-            return this.lcall(listener, args);
-        }
-        else if (returnType === ReturnType.UNTIL_TRUE && prevValue === true) {
+            args = this.prepareArgs(listener, args as unknown as P);
+            return this.lcall(listener, args) as TriggerReturnValue<R>;
+        } else if (
+            returnType === TriggerReturnType.UNTIL_TRUE &&
+            prevValue === true
+        ) {
             return true;
-        }
-        else if (returnType === ReturnType.UNTIL_FALSE && prevValue === false) {
+        } else if (
+            returnType === TriggerReturnType.UNTIL_FALSE &&
+            prevValue === false
+        ) {
             return false;
-        }
-        else if (returnType === ReturnType.FIRST_NON_EMPTY && prevValue !== null && prevValue !== undefined) {
+        } else if (
+            returnType === TriggerReturnType.FIRST_NON_EMPTY &&
+            prevValue !== null &&
+            prevValue !== undefined
+        ) {
             return prevValue;
         }
-        return this.lcall(listener, args);
+        return this.lcall(listener, args) as TriggerReturnValue<R>;
     }
 
-    trigger(origArgs: any[], returnType: ReturnType | null = null, tags?: string[] | null): ReturnValue {
-
+    trigger(
+        origArgs: P,
+        returnType: TriggerReturnType | null = null,
+        tags?: string[] | null,
+    ): TriggerReturnValue<R> {
         if (this.queued) {
-            this.queue.push([ origArgs, returnType ]);
+            this.queue.push([origArgs, returnType]);
             return;
         }
         if (this.suspended) {
@@ -304,83 +354,103 @@ export default class ObservableEvent {
         this.triggered++;
 
         if (this.autoTrigger) {
-            this.lastTrigger = origArgs.slice();
+            this.lastTrigger = origArgs.slice() as P;
         }
 
         // in pipe mode if there is no listeners,
         // we just return piped value
         if (this.listeners.length === 0) {
-            if (returnType === ReturnType.PIPE) {
+            if (returnType === TriggerReturnType.PIPE) {
                 return origArgs[0];
-            }
-            else if (returnType === ReturnType.ALL || 
-                    returnType === ReturnType.CONCAT || 
-                    returnType === ReturnType.RAW) {
+            } else if (
+                returnType === TriggerReturnType.ALL ||
+                returnType === TriggerReturnType.CONCAT ||
+                returnType === TriggerReturnType.RAW
+            ) {
                 return [];
-            }
-            else if (returnType === ReturnType.MERGE) {
+            } else if (returnType === TriggerReturnType.MERGE) {
                 return {};
             }
             return;
         }
 
         const results: any[] = [],
-            queue: Listener[] = this.listeners.slice(),
-            isConsequent = returnType === ReturnType.PIPE ||
-                            returnType === ReturnType.UNTIL_TRUE ||
-                            returnType === ReturnType.UNTIL_FALSE ||
-                            returnType === ReturnType.FIRST_NON_EMPTY;
+            queue: Listener<P, R, O>[] = this.listeners.slice(),
+            isConsequent =
+                returnType === TriggerReturnType.PIPE ||
+                returnType === TriggerReturnType.UNTIL_TRUE ||
+                returnType === TriggerReturnType.UNTIL_FALSE ||
+                returnType === TriggerReturnType.FIRST_NON_EMPTY;
 
-        let args: any[],
-            listener: Listener | undefined,
+        let args: O,
+            listener: Listener<P, R, O> | undefined,
             listenerResult: any = null,
             hasPromises = false;
 
-        while (listener = queue.shift()) {
-
+        while ((listener = queue.shift())) {
             if (!listener) {
                 continue;
             }
 
             args = this.prepareArgs(listener, origArgs);
-            
-            if (this.filter && this.filter.call(this.filterContext, args, listener) === false) {
+
+            if (
+                this.filter &&
+                this.filter.call(this.filterContext, args, listener) === false
+            ) {
                 continue;
             }
 
-            if (listener.filter && 
-                listener.filter.call(this.getFilterContext(listener), args) === false) {
+            if (
+                listener.filter &&
+                listener.filter.call(this.getFilterContext(listener), args) ===
+                    false
+            ) {
                 continue;
             }
 
-            if (tags && tags.length > 0 && 
-                (!listener.tags || !tagsIntersect(tags, listener.tags))) {
+            if (
+                tags &&
+                tags.length > 0 &&
+                (!listener.tags || !tagsIntersect(tags, listener.tags))
+            ) {
                 continue;
             }
 
             listener.count++;
 
-            if (listener.start !== undefined && listener.count < listener.start) {
+            if (
+                listener.start !== undefined &&
+                listener.count < listener.start
+            ) {
                 continue;
             }
 
             if (isConsequent && results.length > 0) {
-                let prev = results[ results.length - 1 ];
+                let prev = results[results.length - 1];
                 if (hasPromises) {
-                    if (!isPromise(prev)) {
+                    if (!(prev instanceof Promise)) {
                         prev = Promise.resolve(prev);
                     }
                     listenerResult = prev.then(
-                        ((listener, args, returnType) => (value:any) => {
-                            return this.lcallWPrev(listener, args, value, returnType);
-                        })(listener, args, returnType)
+                        ((listener, args, returnType) => (value: R) => {
+                            return this.lcallWPrev(
+                                listener,
+                                args,
+                                value,
+                                returnType,
+                            );
+                        })(listener, args, returnType),
+                    );
+                } else {
+                    listenerResult = this.lcallWPrev(
+                        listener,
+                        args,
+                        prev,
+                        returnType,
                     );
                 }
-                else {
-                    listenerResult = this.lcallWPrev(listener, args, prev, returnType);
-                }
-            }
-            else {
+            } else {
                 listenerResult = this.lcall(listener, args);
             }
 
@@ -390,27 +460,31 @@ export default class ObservableEvent {
                 this.un(listener.fn, listener.context);
             }
 
-            if (returnType === ReturnType.FIRST) {
+            if (returnType === TriggerReturnType.FIRST) {
                 return listenerResult;
             }
 
             if (isConsequent) {
                 switch (returnType) {
-                    case ReturnType.UNTIL_TRUE: {
+                    case TriggerReturnType.UNTIL_TRUE: {
                         if (listenerResult === true) {
                             return true;
                         }
                         break;
                     }
-                    case ReturnType.UNTIL_FALSE: {
+                    case TriggerReturnType.UNTIL_FALSE: {
                         if (listenerResult === false) {
                             return false;
                         }
                         break;
                     }
-                    case ReturnType.FIRST_NON_EMPTY: {
-                        if (!hasPromises && !isPromise(listenerResult) && 
-                            listenerResult !== null && listenerResult !== undefined) {
+                    case TriggerReturnType.FIRST_NON_EMPTY: {
+                        if (
+                            !hasPromises &&
+                            !(listenerResult instanceof Promise) &&
+                            listenerResult !== null &&
+                            listenerResult !== undefined
+                        ) {
                             return listenerResult;
                         }
                         break;
@@ -418,56 +492,66 @@ export default class ObservableEvent {
                 }
             }
 
-            if (!hasPromises && isPromise(listenerResult)) {
+            if (!hasPromises && listenerResult instanceof Promise) {
                 hasPromises = true;
             }
-    
+
             results.push(listenerResult);
         }
 
-
         switch (returnType) {
-            case ReturnType.RAW: {
+            case TriggerReturnType.RAW: {
                 return results;
             }
+            case undefined:
             case null: {
                 if (hasPromises) {
-                    return Promise.all(results).then(() => {});
+                    return Promise.all(results).then(() => {}) as R;
                 }
                 return;
             }
-            case ReturnType.ALL: {
+            case TriggerReturnType.ALL: {
                 return hasPromises ? Promise.all(results) : results;
             }
-            case ReturnType.CONCAT: {
-                return hasPromises ? 
-                    Promise.all(results).then(results => results.flat()) :
-                    results.flat();
+            case TriggerReturnType.CONCAT: {
+                return hasPromises
+                    ? (Promise.all(results).then((results) =>
+                          results.flat(),
+                      ) as Promise<R[]>)
+                    : (results.flat() as R[]);
             }
-            case ReturnType.MERGE: {
-                return hasPromises ?
-                    Promise.all(results).then(results => Object.assign.apply(null, [{}, ...results])) :
-                    Object.assign.apply(null, [{}, ...results]);
+            case TriggerReturnType.MERGE: {
+                return hasPromises
+                    ? Promise.all(results).then((results) =>
+                          Object.assign.apply(null, [{}, ...results]),
+                      )
+                    : Object.assign.apply(null, [{}, ...results]);
             }
-            case ReturnType.LAST: {
+            case TriggerReturnType.LAST: {
                 return results.pop();
             }
-            case ReturnType.UNTIL_TRUE: {
+            case TriggerReturnType.UNTIL_TRUE: {
                 return;
             }
-            case ReturnType.UNTIL_FALSE: {
+            case TriggerReturnType.UNTIL_FALSE: {
                 return;
             }
-            case ReturnType.FIRST_NON_EMPTY: {
-                return Promise.all(results).then(results => results.find(r => r !== undefined && r !== null));
+            case TriggerReturnType.FIRST_NON_EMPTY: {
+                return Promise.all(results).then((results) =>
+                    results.find((r) => r !== undefined && r !== null),
+                );
             }
-            case ReturnType.PIPE: {
-                return results[ results.length - 1 ];
+            case TriggerReturnType.PIPE: {
+                return results[results.length - 1];
             }
         }
     }
 
-    resolve(origArgs: any[], returnType: ReturnType | null = null, tags?: string[] | null): Promise<any> {
+    resolve(
+        origArgs: P,
+        returnType: TriggerReturnType | null = null,
+        tags?: string[] | null,
+    ): Promise<TriggerReturnValue<R>> {
         return Promise.resolve(this.trigger(origArgs, returnType, tags));
     }
 }

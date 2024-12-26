@@ -1,21 +1,22 @@
+import { GenericEventArguments } from '../types';
 
-export default function async(
-    fn: (...args: any[]) => any, 
-    context?: object, 
-    args?: any[], 
-    timeout?: number): Promise<any> {
-
-    return new Promise((resolve, reject) => {
-        setTimeout(
-            () => {
-                try {
-                    resolve(fn.apply(context, args || []))
-                }
-                catch (err) {
-                    reject(err)
-                };
-            }, 
-            timeout || 0
-        );
+export default function async<
+    P extends Array<any> = GenericEventArguments,
+    R = any,
+>(
+    fn: (...args: P) => R,
+    context?: object,
+    args?: P,
+    timeout?: number,
+): Promise<R> {
+    return new Promise<R>((resolve, reject) => {
+        args = (args || []) as P;
+        setTimeout(() => {
+            try {
+                resolve(fn.apply(context, args as P));
+            } catch (err) {
+                reject(err);
+            }
+        }, timeout || 0);
     });
 }
