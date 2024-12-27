@@ -59,7 +59,7 @@ const result = await o.resolvePipe("some-job", 1); // 4
 ### Autotrigger:
 ```javascript
 const o = new Observable;
-o.createEvent("auto", { autoTrigger: true });
+o.setEventOptions("auto", { autoTrigger: true });
 // trigger first
 o.trigger("auto", 1, 2);
 // subscribe later
@@ -99,8 +99,8 @@ eventEmitter.emit("source-event"); // ok
 // full proxy to another event bus
 o.addEventSource({
     name: "EventEmitter",
-    on: (eventName, listener) => eventEmitter.on(eventName.replace("emitter-"), listener),
-    un: (eventName, listener) => eventEmitter.off(eventName.replace("emitter-"), listener),
+    on: (eventName, listener) => eventEmitter.on(eventName.replace("emitter-", ""), listener),
+    un: (eventName, listener) => eventEmitter.off(eventName.replace("emitter-", ""), listener),
     accepts: (eventName) => eventName.indexOf("emitter-") === 0
 });
 o.on("emitter-event", () => console.log("triggered from EventEmitter"));
@@ -111,7 +111,7 @@ eventEmitter.emit("event"); // triggered from EventEmitter
 ### Filter:
 ```javascript 
 const o = new Observable;
-o.createEvent("filtered", {
+o.setEventOptions("filtered", {
     filter: (args, l) => {
         if (l.extraData?.always) {
             return true;
@@ -143,6 +143,85 @@ o.trigger("event1", 1, 2); // prints event1 1 2
 o.trigger("event2", 3, 4); // prints event2 3 4
 ```
 
+### Typed events:
+```javascript
+// You can define event handler signatures
+// by extending the module:
+import Observable, { EventMap, EventMapDefinition } from "@kuindji/observable";
+
+const observableId = Symbol();
+
+declare module "@kuindji/observable" {
+    interface EventMap {
+        "text-id": EventMapDefinition<{
+            "event": EventDefinition<
+                // trigger arguments signature
+                [{ username: string; password: string }],
+                // handler return type
+                boolean,
+                // optional handler signature
+                // in case arguments are being transformed
+                [type, type]
+            >;
+        }>;
+        [observableId]: EventMapDefinition<{
+            "event": EventDefinition<
+                [string, boolean],
+                number
+            >;
+        }>;
+    }
+}
+
+const o1 = new Observable<"text-id">();
+const o2 = new Observable<typeof observableId>();
+
+// now when you use on(), trigger() and other functions
+// you will see type hints
+
+o1.on(
+    "event", 
+    (creds: {username: string; password: string}) => true
+);
+o1.trigger("event", {username: "admin", password: "123"});
+
+o2.trigger("event", "string", true);
+
+// You can define event signatures in various ways:
+
+declare module "@kuindji/observable" {
+    interface EventMap {
+        // using EventMapDefinition is preferable
+        // as it also defines "*" event 
+        // and may define something else in future.
+        "observable-id": EventMapDefinition<{
+            "event": EventDefinition<
+                // trigger arguments signature
+                [{ username: string; password: string }],
+                // handler return type
+                boolean,
+                // optional handler signature
+                // in case arguments are being transformed
+                [type, type]
+            >;
+        }>;
+        [observableId]: {
+            "event": EventDefinition<any[], any>,
+            "another": {
+                triggerArguments: [],
+                handlerReturnType: void,
+                handlerArguments: []
+            }
+        }
+    }
+}
+
+// You may use module declaration multiple times with different observable ids.
+// Keep in mind, that once you defined an event map for an observable,
+// TS will stop accepting event names that are not defined in this map.
+
+// Type mapping for event sources is not yet supported.
+```
 
 ### API:
 ```javascript
@@ -251,7 +330,7 @@ const value = await o.resolvePipe(/* required */ "eventName", /* optional */ arg
 // Get a promise for the next trigger and receive event's payload
 await o.promise("eventName");
 
-// Trigger all those listeners that are tagged with tagName
+// Trigger all listeners that are tagged with tagName
 o.withTags(["tagName"], () => {
     o.trigger("eventName"); // also works with all,first,resolve etc
 });
@@ -277,6 +356,7 @@ o.relay(
 
     // if proxyType if specified, anotherObservable can use the return values
     // of this observable's listeners via anotherObservable.first()
+    // see ProxyType type
     /* optional */ "all" || "first" || "etc, methods of Observable"
 );
 
@@ -289,7 +369,7 @@ o.unrelay(
 // create listener for external event bus
 const listener = o.proxy(
     /* required */ "eventNameInThisObservable",
-    /* optional */ "all" || "first" || "etc, methods of Observable"
+    /* optional */ "all" || "first" || "etc, methods of Observable" // see ProxyType
 );
 
 // add proxy to another event bus
@@ -355,7 +435,7 @@ o.on("event", b.handler, { context: b });
  * Events don't have to be "created" in order to be triggered.
  * Use this api to specify event's behaviour. 
  */
-o.createEvent(
+o.setEventOptions(
     /* required */ "eventName", 
     /* optional */ {
         /*

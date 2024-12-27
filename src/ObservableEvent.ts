@@ -14,41 +14,41 @@ import {
     ArgumentsPrependTransformer,
     GenericEventArguments,
     GenericEventHandlerReturnValue,
+    MapKey,
+    GetEventArguments,
+    GetEventHandlerReturnValue,
+    GetEventHandlerArguments,
 } from './types';
 
 /**
  * This class is private - you can't create an event other than via Observable.
  * @private
  */
-export default class ObservableEvent<
-    P extends GenericEventArguments = any[],
-    R = GenericEventHandlerReturnValue,
-    O extends GenericEventArguments = P,
-> {
-    listeners: Listener<P, R, O>[] = [];
-    queue: Array<[P, TriggerReturnType | null]> = [];
+export default class ObservableEvent<Id extends MapKey, E extends MapKey> {
+    listeners: Listener<Id, E>[] = [];
+    queue: Array<[GetEventArguments<Id, E>, TriggerReturnType | null]> = [];
     suspended: boolean = false;
     queued: boolean = false;
     triggered: number = 0;
-    lastTrigger: P | undefined = undefined;
+    lastTrigger: GetEventArguments<Id, E> | undefined = undefined;
     sortListeners: boolean = false;
 
     async: boolean | number = false;
     limit: number = 0;
     autoTrigger: boolean | null = null;
-    filter: TriggerFilter<P, R, O> | null = null;
+    filter: TriggerFilter<Id, E> | null = null;
     filterContext: object | null = null;
-    appendArgs: ArgumentsAppendTransformer<P, R, O> | null = null;
-    prependArgs: ArgumentsPrependTransformer<P, R, O> | null = null;
-    replaceArgs: ArgumentsTransformer<P, R, O> | null = null;
+    appendArgs: ArgumentsAppendTransformer<Id, E> | null = null;
+    prependArgs: ArgumentsPrependTransformer<Id, E> | null = null;
+    replaceArgs: ArgumentsTransformer<Id, E> | null = null;
 
-    constructor(options?: EventOptions<P, R, O>) {
+    constructor(options?: EventOptions<Id, E>) {
         if (options) {
             Object.assign(this, options);
         }
     }
 
-    setOptions(options: EventOptions<P, R, O>) {
+    setOptions(options: EventOptions<Id, E>) {
         Object.assign(this, options);
     }
 
@@ -67,8 +67,11 @@ export default class ObservableEvent<
      * @param options
      */
     on(
-        fn: ListenerFunction<O, R>,
-        options: ListenerOptions<P, R, O> = {},
+        fn: ListenerFunction<
+            GetEventHandlerArguments<Id, E>,
+            GetEventHandlerReturnValue<Id, E>
+        >,
+        options: ListenerOptions<Id, E> = {},
     ): void {
         if (!fn) {
             return;
@@ -82,7 +85,7 @@ export default class ObservableEvent<
             return;
         }
 
-        const listener: Listener<P, R, O> = {
+        const listener: Listener<Id, E> = {
             fn: fn,
             context: undefined,
             async: false,
@@ -106,11 +109,11 @@ export default class ObservableEvent<
 
         if (this.sortListeners) {
             this.listeners = listeners
-                .map((l: Listener<P, R, O>, inx: number): Listener<P, R, O> => {
+                .map((l: Listener<Id, E>, inx: number): Listener<Id, E> => {
                     l.index = inx;
                     return l;
                 })
-                .sort(listenerSorter<P, R, O>);
+                .sort(listenerSorter<Id, E>);
         }
 
         if (options.alwaysFirst === true || options.alwaysLast === true) {
@@ -123,7 +126,10 @@ export default class ObservableEvent<
             !this.suspended
         ) {
             const prevFilter = this.filter;
-            this.filter = (args: O, l?: Listener<P, R, O>) => {
+            this.filter = (
+                args: GetEventHandlerArguments<Id, E>,
+                l?: Listener<Id, E>,
+            ) => {
                 if (l && l.fn === fn) {
                     return prevFilter ? prevFilter(args, l) !== false : true;
                 }
@@ -141,7 +147,10 @@ export default class ObservableEvent<
      * @return boolean
      */
     un(
-        fn: ListenerFunction<O, R>,
+        fn: ListenerFunction<
+            GetEventHandlerArguments<Id, E>,
+            GetEventHandlerReturnValue<Id, E>
+        >,
         context?: object | null,
         tag?: string,
     ): boolean {
@@ -177,7 +186,10 @@ export default class ObservableEvent<
      * @return boolean
      */
     hasListener(
-        fn?: ListenerFunction<O, R> | null,
+        fn?: ListenerFunction<
+            GetEventHandlerArguments<Id, E>,
+            GetEventHandlerReturnValue<Id, E>
+        > | null,
         context?: object | null,
         tag?: string | null,
     ): boolean {
@@ -237,18 +249,22 @@ export default class ObservableEvent<
         }
     }
 
-    getFilterContext(l: Listener<P, R, O>): object | undefined {
+    getFilterContext(l: Listener<Id, E>): object | undefined {
         return l.filterContext || this.filterContext || l.context;
     }
 
-    prepareArgs(l: Listener<P, R, O>, triggerArgs: P): O {
-        let outputArgs: O = triggerArgs as unknown as O;
+    prepareArgs(
+        l: Listener<Id, E>,
+        triggerArgs: GetEventArguments<Id, E>,
+    ): GetEventHandlerArguments<Id, E> {
+        let outputArgs: GetEventHandlerArguments<Id, E> =
+            triggerArgs as GetEventHandlerArguments<Id, E>;
 
-        const append: ArgumentsAppendTransformer<P, R, O> | null =
+        const append: ArgumentsAppendTransformer<Id, E> | null =
                 l.appendArgs || this.appendArgs || null,
-            prepend: ArgumentsPrependTransformer<P, R, O> | null =
+            prepend: ArgumentsPrependTransformer<Id, E> | null =
                 l.prependArgs || this.prependArgs || null,
-            repl: ArgumentsTransformer<P, R, O> | null =
+            repl: ArgumentsTransformer<Id, E> | null =
                 l.replaceArgs || this.replaceArgs || null;
 
         if (append || prepend) {
@@ -257,9 +273,12 @@ export default class ObservableEvent<
                     outputArgs = [
                         ...prepend(l, triggerArgs),
                         ...outputArgs,
-                    ] as O;
+                    ] as GetEventHandlerArguments<Id, E>;
                 } else {
-                    outputArgs = [...prepend, ...outputArgs] as O;
+                    outputArgs = [
+                        ...prepend,
+                        ...outputArgs,
+                    ] as GetEventHandlerArguments<Id, E>;
                 }
             }
             if (append) {
@@ -267,16 +286,21 @@ export default class ObservableEvent<
                     outputArgs = [
                         ...outputArgs,
                         ...append(l, triggerArgs),
-                    ] as O;
+                    ] as GetEventHandlerArguments<Id, E>;
                 } else {
-                    outputArgs = [...outputArgs, ...append] as O;
+                    outputArgs = [
+                        ...outputArgs,
+                        ...append,
+                    ] as GetEventHandlerArguments<Id, E>;
                 }
             }
         } else if (repl) {
             if (typeof repl === 'function') {
-                outputArgs = [...repl(l, triggerArgs)] as O;
+                outputArgs = [
+                    ...repl(l, triggerArgs),
+                ] as GetEventHandlerArguments<Id, E>;
             } else {
-                outputArgs = [...repl] as O;
+                outputArgs = [...repl] as GetEventHandlerArguments<Id, E>;
             }
         }
 
@@ -284,38 +308,48 @@ export default class ObservableEvent<
     }
 
     lcall(
-        listener: Listener<P, R, O>,
-        args: O,
-        resolve: null | ((any: R) => void) = null,
-    ): TriggerReturnValue<R> | void {
+        listener: Listener<Id, E>,
+        args: GetEventHandlerArguments<Id, E>,
+        resolve:
+            | null
+            | ((any: GetEventHandlerReturnValue<Id, E>) => void) = null,
+    ):
+        | GetEventHandlerReturnValue<Id, E>
+        | Promise<GetEventHandlerReturnValue<Id, E>> {
         const isAsync = listener.async !== false ? listener.async : this.async;
-        const fn = listener.fn as ListenerFunction<O, R>;
+        const fn = listener.fn;
         const result =
             isAsync !== false
-                ? /* promise */ async<O, R>(
-                      fn,
-                      listener.context,
-                      args,
-                      isAsync === true ? 0 : isAsync,
-                  )
+                ? /* promise */ async<
+                      GetEventHandlerArguments<Id, E>,
+                      GetEventHandlerReturnValue<Id, E>
+                  >(fn, listener.context, args, isAsync === true ? 0 : isAsync)
                 : /* value or promise */ fn.bind(listener.context)(...args);
+
         if (resolve !== null) {
-            resolve(result as R);
-        } else {
-            return result;
+            if (result instanceof Promise) {
+                result.then(resolve);
+            } else {
+                resolve(result);
+            }
         }
+
+        return result;
     }
 
     lcallWPrev(
-        listener: Listener<P, R, O>,
-        args: O,
-        prevValue: R,
+        listener: Listener<Id, E>,
+        args: GetEventHandlerArguments<Id, E>,
+        prevValue: GetEventHandlerReturnValue<Id, E>,
         returnType: TriggerReturnType,
-    ): TriggerReturnValue<R> {
+    ):
+        | GetEventHandlerReturnValue<Id, E>
+        | Promise<GetEventHandlerReturnValue<Id, E>>
+        | boolean {
         if (returnType === TriggerReturnType.PIPE) {
             args[0] = prevValue;
-            args = this.prepareArgs(listener, args as unknown as P);
-            return this.lcall(listener, args) as TriggerReturnValue<R>;
+            args = this.prepareArgs(listener, args as GetEventArguments<Id, E>);
+            return this.lcall(listener, args);
         } else if (
             returnType === TriggerReturnType.UNTIL_TRUE &&
             prevValue === true
@@ -333,14 +367,14 @@ export default class ObservableEvent<
         ) {
             return prevValue;
         }
-        return this.lcall(listener, args) as TriggerReturnValue<R>;
+        return this.lcall(listener, args);
     }
 
     trigger(
-        origArgs: P,
+        origArgs: GetEventArguments<Id, E>,
         returnType: TriggerReturnType | null = null,
         tags?: string[] | null,
-    ): TriggerReturnValue<R> {
+    ): TriggerReturnValue<GetEventHandlerReturnValue<Id, E>> {
         if (this.queued) {
             this.queue.push([origArgs, returnType]);
             return;
@@ -354,7 +388,7 @@ export default class ObservableEvent<
         this.triggered++;
 
         if (this.autoTrigger) {
-            this.lastTrigger = origArgs.slice() as P;
+            this.lastTrigger = origArgs.slice() as GetEventArguments<Id, E>;
         }
 
         // in pipe mode if there is no listeners,
@@ -375,15 +409,15 @@ export default class ObservableEvent<
         }
 
         const results: any[] = [],
-            queue: Listener<P, R, O>[] = this.listeners.slice(),
+            queue: Listener<Id, E>[] = this.listeners.slice(),
             isConsequent =
                 returnType === TriggerReturnType.PIPE ||
                 returnType === TriggerReturnType.UNTIL_TRUE ||
                 returnType === TriggerReturnType.UNTIL_FALSE ||
                 returnType === TriggerReturnType.FIRST_NON_EMPTY;
 
-        let args: O,
-            listener: Listener<P, R, O> | undefined,
+        let args: GetEventHandlerArguments<Id, E>,
+            listener: Listener<Id, E> | undefined,
             listenerResult: any = null,
             hasPromises = false;
 
@@ -433,14 +467,17 @@ export default class ObservableEvent<
                         prev = Promise.resolve(prev);
                     }
                     listenerResult = prev.then(
-                        ((listener, args, returnType) => (value: R) => {
-                            return this.lcallWPrev(
-                                listener,
-                                args,
-                                value,
-                                returnType,
-                            );
-                        })(listener, args, returnType),
+                        (
+                            (listener, args, returnType) =>
+                            (value: GetEventHandlerReturnValue<Id, E>) => {
+                                return this.lcallWPrev(
+                                    listener,
+                                    args,
+                                    value,
+                                    returnType,
+                                );
+                            }
+                        )(listener, args, returnType),
                     );
                 } else {
                     listenerResult = this.lcallWPrev(
@@ -506,7 +543,9 @@ export default class ObservableEvent<
             case undefined:
             case null: {
                 if (hasPromises) {
-                    return Promise.all(results).then(() => {}) as R;
+                    return Promise.all(results).then(
+                        () => undefined,
+                    ) as Promise<undefined>;
                 }
                 return;
             }
@@ -517,8 +556,8 @@ export default class ObservableEvent<
                 return hasPromises
                     ? (Promise.all(results).then((results) =>
                           results.flat(),
-                      ) as Promise<R[]>)
-                    : (results.flat() as R[]);
+                      ) as Promise<GetEventHandlerReturnValue<Id, E>[]>)
+                    : results.flat();
             }
             case TriggerReturnType.MERGE: {
                 return hasPromises
@@ -548,10 +587,10 @@ export default class ObservableEvent<
     }
 
     resolve(
-        origArgs: P,
+        origArgs: GetEventArguments<Id, E>,
         returnType: TriggerReturnType | null = null,
         tags?: string[] | null,
-    ): Promise<TriggerReturnValue<R>> {
+    ): Promise<TriggerReturnValue<GetEventHandlerReturnValue<Id, E>>> {
         return Promise.resolve(this.trigger(origArgs, returnType, tags));
     }
 }

@@ -1,14 +1,9 @@
-import {
-    Listener,
-    GenericEventArguments,
-    GenericEventHandlerReturnValue,
-} from '../types';
+import { Listener, MapKey } from '../types';
 
-function listenerSorter<
-    P extends GenericEventArguments,
-    R = GenericEventHandlerReturnValue,
-    O extends GenericEventArguments = P,
->(l1: Listener<P, R, O>, l2: Listener<P, R, O>): -1 | 0 | 1 {
+function listenerSorter<Id extends MapKey, E extends MapKey>(
+    l1: Listener<Id, E>,
+    l2: Listener<Id, E>,
+): -1 | 0 | 1 {
     const f1 = l1.alwaysFirst === true ? 1 : 0,
         f2 = l2.alwaysFirst === true ? 1 : 0,
         ls1 = l1.alwaysLast === true ? 1 : 0,

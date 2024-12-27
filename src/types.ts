@@ -17,47 +17,49 @@ export type EventDefinition<
     handlerReturnType: R;
 };
 
-export type EventMapDefinition<M = Record<string | symbol, EventType>> = {
-    '*': EventDefinition<any[], any, [string | symbol, ...any[]]>;
+export type MapKey = string | number | symbol;
+
+export type EventMapDefinition<M = Record<MapKey, EventType>> = {
+    '*': EventDefinition<any[], any, [MapKey, ...any[]]>;
 } & M;
 
 export interface EventMap {
-    [key: symbol | string]: {
-        '*': EventDefinition<any[], any, [string | symbol, ...any[]]>;
-        [key: string | symbol]: EventType;
+    [key: MapKey]: {
+        [key: MapKey]: EventType;
     };
 }
 
-export type EventName<Id extends symbol | string> =
-    | string
-    | symbol
-    | keyof EventMap[Id];
-
 export type GetEventArguments<
-    Id extends symbol | string,
-    K extends keyof EventMap[Id],
-> = [K] extends [keyof EventMap[Id]]
-    ? [EventMap[Id][K]['triggerArguments']] extends [undefined]
-        ? GenericEventArguments
-        : EventMap[Id][K]['triggerArguments']
+    Id extends MapKey,
+    E extends MapKey,
+> = Id extends keyof EventMap
+    ? E extends keyof EventMap[Id]
+        ? [EventMap[Id][E]['triggerArguments']] extends [undefined]
+            ? GenericEventArguments
+            : EventMap[Id][E]['triggerArguments']
+        : GenericEventArguments
     : GenericEventArguments;
 
 export type GetEventHandlerReturnValue<
-    Id extends symbol | string,
-    K extends keyof EventMap[Id],
-> = [K] extends [keyof EventMap[Id]]
-    ? [EventMap[Id][K]['handlerReturnType']] extends [undefined]
-        ? GenericEventHandlerReturnValue
-        : EventMap[Id][K]['handlerReturnType']
+    Id extends MapKey,
+    E extends MapKey,
+> = Id extends keyof EventMap
+    ? E extends keyof EventMap[Id]
+        ? [EventMap[Id][E]['handlerReturnType']] extends [undefined]
+            ? GenericEventHandlerReturnValue
+            : EventMap[Id][E]['handlerReturnType']
+        : GenericEventHandlerReturnValue
     : GenericEventHandlerReturnValue;
 
 export type GetEventHandlerArguments<
-    Id extends symbol | string,
-    K extends keyof EventMap[Id],
-> = [K] extends [keyof EventMap[Id]]
-    ? [EventMap[Id][K]['handlerArguments']] extends [undefined]
-        ? GetEventArguments<Id, K>
-        : EventMap[Id][K]['handlerArguments']
+    Id extends MapKey,
+    E extends MapKey,
+> = Id extends keyof EventMap
+    ? E extends keyof EventMap[Id]
+        ? [EventMap[Id][E]['handlerArguments']] extends [undefined]
+            ? GetEventArguments<Id, E>
+            : EventMap[Id][E]['handlerArguments']
+        : GenericEventArguments
     : GenericEventArguments;
 
 export enum TriggerReturnType {
@@ -74,70 +76,71 @@ export enum TriggerReturnType {
 }
 
 export type InterceptorFunction = (
-    eventName: string | symbol,
+    eventName: MapKey,
     params: any[],
     returnType: any,
     tags?: string[] | null,
 ) => boolean;
 
-export type TriggerFilter<
-    P extends GenericEventArguments,
-    R = GenericEventHandlerReturnValue,
-    O extends GenericEventArguments = P,
-> = (params: O, listener?: Listener<P, R, O>) => boolean;
+export type TriggerFilter<Id extends MapKey, E extends MapKey> = (
+    params: GetEventHandlerArguments<Id, E>,
+    listener?: Listener<Id, E>,
+) => boolean;
 
 export type ListenerFunction<
     P extends GenericEventArguments,
     R = GenericEventHandlerReturnValue,
 > = (...args: P) => R;
 
-export type ArgumentsPrependTransformer<
-    P extends GenericEventArguments,
-    R = GenericEventHandlerReturnValue,
-    O extends GenericEventArguments = P,
-> = any[] | ((listener: Listener<P, R, O>, args: P) => any[]);
+export type ArgumentsPrependTransformer<Id extends MapKey, E extends MapKey> =
+    | GetEventHandlerArguments<Id, E>
+    | ((
+          listener: Listener<Id, E>,
+          args: GetEventArguments<Id, E>,
+      ) => GetEventHandlerArguments<Id, E>);
 
-export type ArgumentsAppendTransformer<
-    P extends GenericEventArguments,
-    R = GenericEventHandlerReturnValue,
-    O extends GenericEventArguments = P,
-> = any[] | ((listener: Listener<P, R, O>, args: P) => any[]);
+export type ArgumentsAppendTransformer<Id extends MapKey, E extends MapKey> =
+    | GetEventHandlerArguments<Id, E>
+    | ((
+          listener: Listener<Id, E>,
+          args: GetEventArguments<Id, E>,
+      ) => GetEventHandlerArguments<Id, E>);
 
-export type ArgumentsTransformer<
-    P extends GenericEventArguments,
-    R = GenericEventHandlerReturnValue,
-    O extends GenericEventArguments = P,
-> = O | ((listener: Listener<P, R, O>, args: P) => O);
+export type ArgumentsTransformer<Id extends MapKey, E extends MapKey> =
+    | GetEventHandlerArguments<Id, E>
+    | ((
+          listener: Listener<Id, E>,
+          args: GetEventArguments<Id, E>,
+      ) => GetEventHandlerArguments<Id, E>);
 
 export type TriggerReturnValue<R = any> =
     | undefined
     | R
     | R[]
     | { [key: string]: R }
-    | Promise<R>
-    | Promise<R[]>
-    | Promise<{ [key: string]: R }>
-    | boolean;
+    | true
+    | false
+    | Promise<R | R[] | { [key: string]: R } | undefined | true | false>;
 
 export type EventSourceSubscriber = (
-    name: string | symbol,
+    name: MapKey,
     fn: (...args: any[]) => any,
     eventSource: EventSource,
-    options?: ListenerOptions<unknown[], unknown>,
+    options?: Record<string, any>,
 ) => void;
 
 export type EventSourceUnsubscriber = (
-    name: string | symbol,
+    name: MapKey,
     fn: (...args: any[]) => any,
     eventSource: EventSource,
     tag?: string,
 ) => void;
 
 export type EventSource = {
-    name: string | symbol;
+    name: MapKey;
     on: EventSourceSubscriber;
     un: EventSourceUnsubscriber;
-    accepts: ((name: string | symbol) => boolean) | boolean;
+    accepts: ((name: MapKey) => boolean) | boolean;
     proxyType?: ProxyType;
     [key: string]: any;
 };
@@ -186,15 +189,11 @@ export type ReturnableProxyType =
     | ProxyType.PIPE
     | ProxyType.RAW;
 
-type BaseEventOptions<
-    P extends GenericEventArguments,
-    R = GenericEventHandlerReturnValue,
-    O extends GenericEventArguments = P,
-> = {
+type BaseEventOptions<Id extends MapKey, E extends MapKey> = {
     /**
      * A function that decides whether event should trigger a listener this time
      */
-    filter?: TriggerFilter<P, R, O>;
+    filter?: TriggerFilter<Id, E>;
     /**
      * TriggerFilter's this object, if needed
      */
@@ -202,15 +201,15 @@ type BaseEventOptions<
     /**
      * Append parameters
      */
-    appendArgs?: ArgumentsAppendTransformer<P, R, O>;
+    appendArgs?: ArgumentsAppendTransformer<Id, E>;
     /**
      * Prepend parameters
      */
-    prependArgs?: ArgumentsPrependTransformer<P, R, O>;
+    prependArgs?: ArgumentsPrependTransformer<Id, E>;
     /**
      * Replace parameters
      */
-    replaceArgs?: ArgumentsTransformer<P, R, O>;
+    replaceArgs?: ArgumentsTransformer<Id, E>;
     /**
      * Call this listener asynchronously. If event was
      *  created with <code>expectPromises: true</code>,
@@ -223,10 +222,9 @@ type BaseEventOptions<
  * Event options
  */
 export type EventOptions<
-    P extends GenericEventArguments,
-    R = GenericEventHandlerReturnValue,
-    O extends GenericEventArguments = P,
-> = BaseEventOptions<P, R, O> & {
+    Id extends MapKey,
+    E extends MapKey,
+> = BaseEventOptions<Id, E> & {
     /**
      * once triggered, all future subscribers will be automatically called
      * with last trigger params
@@ -240,10 +238,9 @@ export type EventOptions<
 };
 
 export type ListenerOptions<
-    P extends GenericEventArguments,
-    R = GenericEventHandlerReturnValue,
-    O extends GenericEventArguments = P,
-> = BaseEventOptions<P, R, O> & {
+    Id extends MapKey,
+    E extends MapKey,
+> = BaseEventOptions<Id, E> & {
     /**
      * True to prepend to the list of listeners
      * @default false
@@ -283,74 +280,56 @@ export type ListenerOptions<
     extraData?: any;
 };
 
-export type Listener<
-    P extends GenericEventArguments,
-    R = GenericEventHandlerReturnValue,
-    O extends GenericEventArguments = P,
-> = ListenerOptions<P, R, O> & {
-    fn: ListenerFunction<O, R>;
+export type Listener<Id extends MapKey, E extends MapKey> = ListenerOptions<
+    Id,
+    E
+> & {
+    fn: ListenerFunction<
+        GetEventHandlerArguments<Id, E>,
+        GetEventHandlerReturnValue<Id, E>
+    >;
     called: number;
     count: number;
     index: number;
 };
 
-export type ObservableApiOn<
-    Id extends symbol | string,
-    K extends keyof EventMap[Id] = string,
-> = (
-    name: K,
+export type ObservableApiOn<Id extends MapKey, E extends MapKey = any> = (
+    name: E,
     fn: ListenerFunction<
-        GetEventHandlerArguments<Id, K>,
-        GetEventHandlerReturnValue<Id, K>
+        GetEventHandlerArguments<Id, E>,
+        GetEventHandlerReturnValue<Id, E>
     >,
-    options?: ListenerOptions<
-        GetEventArguments<Id, K>,
-        GetEventHandlerReturnValue<Id, K>,
-        GetEventHandlerArguments<Id, K>
-    >,
+    options?: ListenerOptions<Id, E>,
 ) => void;
 
-export type ObservableApiOnce<
-    Id extends symbol | string,
-    K extends keyof EventMap[Id] = string,
-> = (
-    name: K,
+export type ObservableApiOnce<Id extends MapKey, E extends MapKey = any> = (
+    name: E,
     fn: ListenerFunction<
-        GetEventHandlerArguments<Id, K>,
-        GetEventHandlerReturnValue<Id, K>
+        GetEventHandlerArguments<Id, E>,
+        GetEventHandlerReturnValue<Id, E>
     >,
-    options?: ListenerOptions<
-        GetEventArguments<Id, K>,
-        GetEventHandlerReturnValue<Id, K>,
-        GetEventHandlerArguments<Id, K>
-    >,
+    options?: ListenerOptions<Id, E>,
 ) => void;
 
-export type ObservableApiUn<
-    Id extends symbol | string,
-    K extends keyof EventMap[Id] = string,
-> = (
-    name: K,
+export type ObservableApiUn<Id extends MapKey, E extends MapKey = any> = (
+    name: E,
     fn: ListenerFunction<
-        GetEventHandlerArguments<Id, K>,
-        GetEventHandlerReturnValue<Id, K>
+        GetEventHandlerArguments<Id, E>,
+        GetEventHandlerReturnValue<Id, E>
     >,
     context?: object,
 ) => void;
 
-export type ObservableApiHas<
-    Id extends symbol | string,
-    K extends keyof EventMap[Id] = string,
-> = (
-    name?: string,
+export type ObservableApiHas<Id extends MapKey, E extends MapKey = any> = (
+    name?: E,
     fn?: ListenerFunction<
-        GetEventHandlerArguments<Id, K>,
-        GetEventHandlerReturnValue<Id, K>
+        GetEventHandlerArguments<Id, E>,
+        GetEventHandlerReturnValue<Id, E>
     >,
     context?: object,
 ) => boolean;
 
-export type ObservablePubliApi<Id extends symbol | string> = {
+export type ObservablePubliApi<Id extends MapKey> = {
     on: ObservableApiOn<Id>;
     un: ObservableApiUn<Id>;
     once: ObservableApiOnce<Id>;
