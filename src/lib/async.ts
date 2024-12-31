@@ -1,7 +1,7 @@
-import { GenericEventArguments } from '../types';
+import { DefaultArgumentsType } from '../types';
 
 export default function async<
-    P extends Array<any> = GenericEventArguments,
+    P extends Array<any> = DefaultArgumentsType,
     R = any,
 >(
     fn: (...args: P) => R,

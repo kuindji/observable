@@ -1,9 +1,6 @@
-import { Listener, MapKey } from '../types';
-
-function listenerSorter<Id extends MapKey, E extends MapKey>(
-    l1: Listener<Id, E>,
-    l2: Listener<Id, E>,
-): -1 | 0 | 1 {
+function listenerSorter<
+    L extends { alwaysFirst: boolean; alwaysLast: boolean; index: number },
+>(l1: L, l2: L): -1 | 0 | 1 {
     const f1 = l1.alwaysFirst === true ? 1 : 0,
         f2 = l2.alwaysFirst === true ? 1 : 0,
         ls1 = l1.alwaysLast === true ? 1 : 0,

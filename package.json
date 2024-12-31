@@ -32,11 +32,11 @@
         "@types/mocha": "^10.0.1",
         "@types/sinon": "^10.0.15",
         "chai": "^4.3.7",
+        "events": "^3.3.0",
         "mocha": "^10.2.0",
         "prettier": "^2.8.0",
         "sinon": "^15.2.0",
         "ts-mocha": "^10.0.0",
-        "typescript": "^5",
-        "events": "^3.3.0"
+        "typescript": "^5"
     }
 }

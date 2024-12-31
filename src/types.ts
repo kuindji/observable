@@ -1,66 +1,210 @@
-export type GenericEventArguments = any[];
-export type GenericEventHandlerReturnValue = any;
+export type MapKey = string | number | symbol;
+export interface BaseMap {
+    [key: MapKey]: any;
+}
+
+type CommonKeys<T extends object> = keyof T;
+type AllKeys<T> = T extends any ? keyof T : never;
+type Subtract<A, C> = A extends C ? never : A;
+type NonCommonKeys<T extends object> = Subtract<AllKeys<T>, CommonKeys<T>>;
+type PickType<T, K extends AllKeys<T>> = T extends { [k in K]?: any }
+    ? T[K]
+    : undefined;
+export type Merge<T extends object> = {
+    [k in NonCommonKeys<T>]: Exclude<PickType<T, k>, undefined>;
+};
+type UnionToIntersection<U> = (U extends any ? (x: U) => void : never) extends (
+    x: infer I,
+) => void
+    ? I
+    : never;
+type IsUnion<T> = [T] extends [UnionToIntersection<T>] ? false : true;
+
+export type ConstructSingleMap<
+    IdOrMap extends MapKey | object = never,
+    MapSource extends { [key: MapKey]: object } = {},
+    DefaultMap extends any = never,
+    IsIdOrMapUnion extends boolean = IsUnion<IdOrMap>,
+    SingleObject extends object = [IsIdOrMapUnion] extends [false]
+        ? [IdOrMap] extends [object]
+            ? IdOrMap
+            : never
+        : never,
+    MapKeys extends MapKey = Exclude<IdOrMap, object>,
+    Objects extends object = Exclude<IdOrMap, MapKey>,
+    IsMapKeyUnion extends boolean = IsUnion<MapKeys>,
+    IsObjectUnion extends boolean = IsUnion<Objects>,
+    IsOnlyMapKeys extends boolean = [Objects] extends [never]
+        ? [MapKeys] extends [never]
+            ? false
+            : true
+        : false,
+    IsOnlyObjects extends boolean = [MapKeys] extends [never]
+        ? [Objects] extends [never]
+            ? false
+            : true
+        : false,
+    IsEmpty extends boolean = [MapKeys] extends [never]
+        ? [Objects] extends [never]
+            ? true
+            : false
+        : false,
+    IsMixed extends boolean = [IsEmpty] extends [true]
+        ? false
+        : [IsOnlyMapKeys] extends [true]
+        ? false
+        : [IsOnlyObjects] extends [true]
+        ? false
+        : true,
+    MapKeysData extends object = [IsMapKeyUnion] extends [true]
+        ? Merge<MapSource[MapKeys & keyof MapSource]>
+        : MapSource[MapKeys & keyof MapSource],
+    ObjectsData extends object = [IsObjectUnion] extends [true]
+        ? Merge<Objects>
+        : Objects,
+> = [SingleObject] extends [never]
+    ? [IsEmpty] extends [true]
+        ? DefaultMap
+        : [IsMixed] extends [true]
+        ? Merge<MapKeysData | ObjectsData>
+        : [IsOnlyMapKeys] extends [true]
+        ? MapKeysData
+        : [IsOnlyObjects] extends [true]
+        ? ObjectsData
+        : DefaultMap
+    : SingleObject;
+
+export type DefaultArgumentsType = any[];
+export type DefaultReturnType = any;
+export type DefaultHandler = (
+    ...args: DefaultArgumentsType
+) => DefaultReturnType;
+
+// export type GenericEventArguments = any[];
+// export type GenericEventHandlerReturnValue = any;
 
 export interface EventType {
-    triggerArguments: GenericEventArguments;
-    handlerArguments: GenericEventArguments;
-    handlerReturnType: GenericEventHandlerReturnValue;
+    triggerArguments: DefaultArgumentsType;
+    handlerArguments: DefaultArgumentsType;
+    handlerReturnType: DefaultReturnType;
 }
 
 export type EventDefinition<
-    P extends GenericEventArguments = GenericEventArguments,
-    R = GenericEventHandlerReturnValue,
-    O extends GenericEventArguments = P,
+    P extends DefaultArgumentsType = DefaultArgumentsType,
+    R = DefaultReturnType,
+    O extends DefaultArgumentsType = P,
 > = {
     triggerArguments: P;
     handlerArguments: O;
     handlerReturnType: R;
 };
 
-export type MapKey = string | number | symbol;
+// export type EventMapDefinition<M extends object> = M;
 
-export type EventMapDefinition<M = Record<MapKey, EventType>> = {
-    '*': EventDefinition<any[], any, [MapKey, ...any[]]>;
-} & M;
+export type EventMapDefinition<M extends object> = Merge<
+    | {
+          '*': EventDefinition<any[], any, [MapKey, ...any[]]>;
+      }
+    | M
+>;
 
 export interface EventMap {
     [key: MapKey]: {
-        [key: MapKey]: EventType;
+        [key: MapKey]: object;
     };
 }
 
-export type GetEventArguments<
-    Id extends MapKey,
-    E extends MapKey,
-> = Id extends keyof EventMap
-    ? E extends keyof EventMap[Id]
-        ? [EventMap[Id][E]['triggerArguments']] extends [undefined]
-            ? GenericEventArguments
-            : EventMap[Id][E]['triggerArguments']
-        : GenericEventArguments
-    : GenericEventArguments;
+type B1 = [never] extends [any[]] ? true : false;
 
-export type GetEventHandlerReturnValue<
-    Id extends MapKey,
-    E extends MapKey,
-> = Id extends keyof EventMap
-    ? E extends keyof EventMap[Id]
-        ? [EventMap[Id][E]['handlerReturnType']] extends [undefined]
-            ? GenericEventHandlerReturnValue
-            : EventMap[Id][E]['handlerReturnType']
-        : GenericEventHandlerReturnValue
-    : GenericEventHandlerReturnValue;
+export type GetFirstKnownArgument<
+    T1 extends Array<any>,
+    T2 extends Array<any>,
+    T3 extends Array<any>,
+> = [unknown] extends [T1] ? ([unknown] extends [T2] ? T3 : T2) : T1;
 
-export type GetEventHandlerArguments<
-    Id extends MapKey,
-    E extends MapKey,
-> = Id extends keyof EventMap
-    ? E extends keyof EventMap[Id]
-        ? [EventMap[Id][E]['handlerArguments']] extends [undefined]
-            ? GetEventArguments<Id, E>
-            : EventMap[Id][E]['handlerArguments']
-        : GenericEventArguments
-    : GenericEventArguments;
+export type ConstructHandlerFromMap<
+    Map extends BaseMap = any,
+    E extends MapKey & keyof Map = any,
+> = [Map[E]] extends [
+    {
+        triggerArguments?: infer TArgs extends Array<any>;
+        handlerArguments?: infer HArgs extends Array<any>;
+        handlerReturnType?: infer Ret;
+    },
+]
+    ? (
+          ...args: GetFirstKnownArgument<HArgs, TArgs, DefaultArgumentsType>
+      ) => [unknown] extends [Ret] ? DefaultReturnType : Ret
+    : DefaultHandler;
+
+export type GetHandlerArgumentsFromMap<
+    Map extends BaseMap = any,
+    E extends keyof Map = any,
+> = [Map[E]] extends [
+    {
+        triggerArguments?: infer TArgs extends Array<any>;
+        handlerArguments?: infer HArgs extends Array<any>;
+    },
+]
+    ? GetFirstKnownArgument<HArgs, TArgs, DefaultArgumentsType>
+    : DefaultArgumentsType;
+
+export type GetTriggerArgumentsFromMap<
+    Map extends BaseMap = any,
+    E extends keyof Map = any,
+> = [Map[E]] extends [
+    {
+        triggerArguments?: infer TArgs extends Array<any>;
+    },
+]
+    ? [unknown] extends [TArgs]
+        ? DefaultArgumentsType
+        : TArgs
+    : DefaultArgumentsType;
+
+export type GetHandlerReturnTypeFromMap<
+    Map extends BaseMap = any,
+    E extends keyof Map = any,
+> = [Map[E]] extends [
+    {
+        handlerReturnType?: infer Ret;
+    },
+]
+    ? Ret
+    : DefaultReturnType;
+
+// export type GetEventArguments<
+//     Id extends MapKey,
+//     E extends MapKey,
+// > = Id extends keyof EventMap
+//     ? E extends keyof EventMap[Id]
+//         ? [EventMap[Id][E]['triggerArguments']] extends [undefined]
+//             ? GenericEventArguments
+//             : EventMap[Id][E]['triggerArguments']
+//         : GenericEventArguments
+//     : GenericEventArguments;
+
+// export type GetEventHandlerReturnValue<
+//     Id extends MapKey,
+//     E extends MapKey,
+// > = Id extends keyof EventMap
+//     ? E extends keyof EventMap[Id]
+//         ? [EventMap[Id][E]['handlerReturnType']] extends [undefined]
+//             ? GenericEventHandlerReturnValue
+//             : EventMap[Id][E]['handlerReturnType']
+//         : GenericEventHandlerReturnValue
+//     : GenericEventHandlerReturnValue;
+
+// export type GetEventHandlerArguments<
+//     Id extends MapKey,
+//     E extends MapKey,
+// > = Id extends keyof EventMap
+//     ? E extends keyof EventMap[Id]
+//         ? [EventMap[Id][E]['handlerArguments']] extends [undefined]
+//             ? GetEventArguments<Id, E>
+//             : EventMap[Id][E]['handlerArguments']
+//         : GenericEventArguments
+//     : GenericEventArguments;
 
 export enum TriggerReturnType {
     RAW = 'raw',
@@ -82,36 +226,48 @@ export type InterceptorFunction = (
     tags?: string[] | null,
 ) => boolean;
 
-export type TriggerFilter<Id extends MapKey, E extends MapKey> = (
-    params: GetEventHandlerArguments<Id, E>,
-    listener?: Listener<Id, E>,
+export type TriggerFilter<
+    EventsMap extends BaseMap,
+    E extends MapKey & keyof EventsMap,
+> = (
+    params: GetHandlerArgumentsFromMap<EventsMap, E>,
+    listener?: any, //Listener<EventsMap, E>,
 ) => boolean;
 
 export type ListenerFunction<
-    P extends GenericEventArguments,
-    R = GenericEventHandlerReturnValue,
+    P extends DefaultArgumentsType,
+    R = DefaultReturnType,
 > = (...args: P) => R;
 
-export type ArgumentsPrependTransformer<Id extends MapKey, E extends MapKey> =
-    | GetEventHandlerArguments<Id, E>
+export type ArgumentsPrependTransformer<
+    EventsMap extends BaseMap,
+    E extends MapKey & keyof EventsMap,
+> =
+    | GetHandlerArgumentsFromMap<EventsMap, E>
     | ((
-          listener: Listener<Id, E>,
-          args: GetEventArguments<Id, E>,
-      ) => GetEventHandlerArguments<Id, E>);
+          listener: Listener<EventsMap, E>,
+          args: GetTriggerArgumentsFromMap<EventsMap, E>,
+      ) => GetHandlerArgumentsFromMap<EventsMap, E>);
 
-export type ArgumentsAppendTransformer<Id extends MapKey, E extends MapKey> =
-    | GetEventHandlerArguments<Id, E>
+export type ArgumentsAppendTransformer<
+    EventsMap extends BaseMap,
+    E extends MapKey & keyof EventsMap,
+> =
+    | GetHandlerArgumentsFromMap<EventsMap, E>
     | ((
-          listener: Listener<Id, E>,
-          args: GetEventArguments<Id, E>,
-      ) => GetEventHandlerArguments<Id, E>);
+          listener: Listener<EventsMap, E>,
+          args: GetTriggerArgumentsFromMap<EventsMap, E>,
+      ) => GetHandlerArgumentsFromMap<EventsMap, E>);
 
-export type ArgumentsTransformer<Id extends MapKey, E extends MapKey> =
-    | GetEventHandlerArguments<Id, E>
+export type ArgumentsTransformer<
+    EventsMap extends BaseMap,
+    E extends MapKey & keyof EventsMap,
+> =
+    | GetHandlerArgumentsFromMap<EventsMap, E>
     | ((
-          listener: Listener<Id, E>,
-          args: GetEventArguments<Id, E>,
-      ) => GetEventHandlerArguments<Id, E>);
+          listener: Listener<EventsMap, E>,
+          args: GetTriggerArgumentsFromMap<EventsMap, E>,
+      ) => GetHandlerArgumentsFromMap<EventsMap, E>);
 
 export type TriggerReturnValue<R = any> =
     | undefined
@@ -148,8 +304,8 @@ export type EventSource = {
 export type WithTagCallback = () => void;
 
 export type ProxyListener<
-    P extends Array<any> = GenericEventArguments,
-    R = GenericEventHandlerReturnValue,
+    P extends Array<any> = DefaultArgumentsType,
+    R = DefaultReturnType,
 > = (...args: P) => R;
 
 export enum ProxyType {
@@ -189,11 +345,11 @@ export type ReturnableProxyType =
     | ProxyType.PIPE
     | ProxyType.RAW;
 
-type BaseEventOptions<Id extends MapKey, E extends MapKey> = {
+type BaseEventOptions<EventsMap extends BaseMap, E extends MapKey> = {
     /**
      * A function that decides whether event should trigger a listener this time
      */
-    filter?: TriggerFilter<Id, E>;
+    filter?: TriggerFilter<EventsMap, E>;
     /**
      * TriggerFilter's this object, if needed
      */
@@ -201,15 +357,15 @@ type BaseEventOptions<Id extends MapKey, E extends MapKey> = {
     /**
      * Append parameters
      */
-    appendArgs?: ArgumentsAppendTransformer<Id, E>;
+    appendArgs?: ArgumentsAppendTransformer<EventsMap, E>;
     /**
      * Prepend parameters
      */
-    prependArgs?: ArgumentsPrependTransformer<Id, E>;
+    prependArgs?: ArgumentsPrependTransformer<EventsMap, E>;
     /**
      * Replace parameters
      */
-    replaceArgs?: ArgumentsTransformer<Id, E>;
+    replaceArgs?: ArgumentsTransformer<EventsMap, E>;
     /**
      * Call this listener asynchronously. If event was
      *  created with <code>expectPromises: true</code>,
@@ -222,9 +378,9 @@ type BaseEventOptions<Id extends MapKey, E extends MapKey> = {
  * Event options
  */
 export type EventOptions<
-    Id extends MapKey,
+    EventsMap extends BaseMap,
     E extends MapKey,
-> = BaseEventOptions<Id, E> & {
+> = BaseEventOptions<EventsMap, E> & {
     /**
      * once triggered, all future subscribers will be automatically called
      * with last trigger params
@@ -238,9 +394,9 @@ export type EventOptions<
 };
 
 export type ListenerOptions<
-    Id extends MapKey,
-    E extends MapKey,
-> = BaseEventOptions<Id, E> & {
+    EventsMap extends BaseMap,
+    E extends MapKey & keyof EventsMap,
+> = BaseEventOptions<EventsMap, E> & {
     /**
      * True to prepend to the list of listeners
      * @default false
@@ -280,58 +436,72 @@ export type ListenerOptions<
     extraData?: any;
 };
 
-export type Listener<Id extends MapKey, E extends MapKey> = ListenerOptions<
-    Id,
-    E
-> & {
-    fn: ListenerFunction<
-        GetEventHandlerArguments<Id, E>,
-        GetEventHandlerReturnValue<Id, E>
-    >;
+export type Listener<
+    EventsMap extends BaseMap,
+    E extends MapKey & keyof EventsMap,
+    FnType extends DefaultHandler = ConstructHandlerFromMap<EventsMap, E>,
+> = ListenerOptions<EventsMap, E> & {
+    fn: FnType;
     called: number;
     count: number;
     index: number;
 };
 
-export type ObservableApiOn<Id extends MapKey, E extends MapKey = any> = (
+export type NormalizeEventMap<EventsMap extends BaseMap> = {
+    [E in keyof EventsMap]: {
+        triggerArguments: GetTriggerArgumentsFromMap<EventsMap, E> & Array<any>;
+        handlerArguments: GetHandlerArgumentsFromMap<EventsMap, E> & Array<any>;
+        handler: ConstructHandlerFromMap<EventsMap, E>;
+        handlerReturnType: GetHandlerReturnTypeFromMap<EventsMap, E>;
+        listener: Listener<EventsMap, E>;
+        eventOptions: EventOptions<EventsMap, E>;
+        listenerOptions: ListenerOptions<EventsMap, E>;
+        triggerFilter: TriggerFilter<EventsMap, E>;
+        prependTransformer: ArgumentsPrependTransformer<EventsMap, E>;
+        appendTransformer: ArgumentsAppendTransformer<EventsMap, E>;
+        replaceTransformer: ArgumentsTransformer<EventsMap, E>;
+    };
+};
+
+export type ObservableApiOn<
+    EventsMap extends BaseMap,
+    E extends MapKey & keyof EventsMap = any,
+> = (
     name: E,
-    fn: ListenerFunction<
-        GetEventHandlerArguments<Id, E>,
-        GetEventHandlerReturnValue<Id, E>
-    >,
-    options?: ListenerOptions<Id, E>,
+    fn: ConstructHandlerFromMap<EventsMap, E>,
+    options?: ListenerOptions<EventsMap, E>,
 ) => void;
 
-export type ObservableApiOnce<Id extends MapKey, E extends MapKey = any> = (
+export type ObservableApiOnce<
+    EventsMap extends BaseMap,
+    E extends MapKey & keyof EventsMap = any,
+> = (
     name: E,
-    fn: ListenerFunction<
-        GetEventHandlerArguments<Id, E>,
-        GetEventHandlerReturnValue<Id, E>
-    >,
-    options?: ListenerOptions<Id, E>,
+    fn: ConstructHandlerFromMap<EventsMap, E>,
+    options?: ListenerOptions<EventsMap, E>,
 ) => void;
 
-export type ObservableApiUn<Id extends MapKey, E extends MapKey = any> = (
+export type ObservableApiUn<
+    EventsMap extends BaseMap,
+    E extends MapKey & keyof EventsMap = any,
+> = (
     name: E,
-    fn: ListenerFunction<
-        GetEventHandlerArguments<Id, E>,
-        GetEventHandlerReturnValue<Id, E>
-    >,
+    fn: ConstructHandlerFromMap<EventsMap, E>,
     context?: object,
 ) => void;
 
-export type ObservableApiHas<Id extends MapKey, E extends MapKey = any> = (
+export type ObservableApiHas<
+    EventsMap extends BaseMap,
+    E extends MapKey & keyof EventsMap = any,
+> = (
     name?: E,
-    fn?: ListenerFunction<
-        GetEventHandlerArguments<Id, E>,
-        GetEventHandlerReturnValue<Id, E>
-    >,
+    fn?: ConstructHandlerFromMap<EventsMap, E>,
     context?: object,
 ) => boolean;
 
-export type ObservablePubliApi<Id extends MapKey> = {
-    on: ObservableApiOn<Id>;
-    un: ObservableApiUn<Id>;
-    once: ObservableApiOnce<Id>;
-    has: ObservableApiHas<Id>;
+export type ObservablePubliApi<EventsMap extends BaseMap> = {
+    on: ObservableApiOn<EventsMap>;
+    un: ObservableApiUn<EventsMap>;
+    once: ObservableApiOnce<EventsMap>;
+    has: ObservableApiHas<EventsMap>;
 };

@@ -2,8 +2,6 @@ import ObservableEvent from './ObservableEvent';
 import {
     ObservablePubliApi,
     TriggerReturnType,
-    EventOptions,
-    ListenerOptions,
     ListenerFunction,
     TriggerReturnValue,
     EventSource,
@@ -12,20 +10,35 @@ import {
     InterceptorFunction,
     WithTagCallback,
     EventMap,
-    GetEventArguments,
-    GetEventHandlerReturnValue,
-    GetEventHandlerArguments,
     ReturnableProxyType,
     MapKey,
+    BaseMap,
+    NormalizeEventMap,
+    ConstructSingleMap,
+    DefaultArgumentsType,
+    EventOptions,
 } from './types';
 
-type EventStore<Id extends MapKey> = Record<
-    keyof EventMap[Id] | MapKey,
-    ObservableEvent<Id, keyof EventMap[Id] | MapKey>
->;
+type EventStore<Map extends BaseMap> = {
+    [K in keyof Map]: ObservableEvent<Map, K>;
+};
 
 type ProxyListenerMap = {
     [key: string]: ProxyListener;
+};
+
+export type InferObservableType<
+    O extends Observable,
+    Id extends MapKey | BaseMap = O extends Observable<
+        infer Id extends MapKey | BaseMap
+    >
+        ? Id
+        : any,
+    Map extends BaseMap = O extends Observable<any, infer Map> ? Map : any,
+> = {
+    Id: Id;
+    EventsMap: Map;
+    Type: Observable<Id, Map>;
 };
 
 /**
@@ -33,13 +46,24 @@ type ProxyListenerMap = {
  * observable, collector and pipe.
  * @author Ivan Kuindzhi
  */
-export default class Observable<Id extends MapKey = any> {
-    events: EventStore<Id> = {} as EventStore<Id>;
-    external: ProxyListenerMap = {};
-    eventSources: EventSource[] = [];
-    publicApi: ObservablePubliApi<Id> | null = null;
+export default class Observable<
+    IdOrMap extends MapKey | BaseMap = BaseMap,
+    Map extends BaseMap = NormalizeEventMap<
+        ConstructSingleMap<IdOrMap, EventMap, any>
+    >,
+> {
+    private events: EventStore<Map>;
+    external: ProxyListenerMap;
+    eventSources: EventSource[];
+    publicApi: ObservablePubliApi<Map> | null = null;
     interceptor: InterceptorFunction | null = null;
     _tags?: string[] | null = null;
+
+    constructor() {
+        this.events = {} as EventStore<Map>;
+        this.external = {};
+        this.eventSources = [];
+    }
 
     withTags(tags: string[], fn: WithTagCallback) {
         this._tags = tags;
@@ -52,9 +76,9 @@ export default class Observable<Id extends MapKey = any> {
      * @param options
      * @deprecated
      */
-    createEvent<E extends keyof EventMap[Id]>(
+    createEvent<E extends MapKey>(
         name: E,
-        options: EventOptions<Id, E>,
+        options: EventOptions<BaseMap, MapKey>,
     ): void {
         this.setEventOptions(name, options);
     }
@@ -64,12 +88,12 @@ export default class Observable<Id extends MapKey = any> {
      * @param name Event name
      * @param options Event options
      */
-    setEventOptions<E extends keyof EventMap[Id]>(
+    setEventOptions<E extends MapKey>(
         name: E,
-        options: EventOptions<Id, E>,
+        options: EventOptions<BaseMap, MapKey>,
     ): void {
         if (!this.events[name]) {
-            this.events[name] = new ObservableEvent<Id, E>(options);
+            this.events[name] = new ObservableEvent<Map, E>(options);
         } else {
             this.events[name].setOptions(options);
         }
@@ -82,13 +106,10 @@ export default class Observable<Id extends MapKey = any> {
      * @param options You can pass any key-value pairs in this object. All of them will be passed
      *       to triggerFilter (if you're using one).
      */
-    on<E extends keyof EventMap[Id]>(
+    on<E extends MapKey & keyof Map>(
         name: E,
-        fn: ListenerFunction<
-            GetEventHandlerArguments<Id, E>,
-            GetEventHandlerReturnValue<Id, E>
-        >,
-        options?: ListenerOptions<Id, E>,
+        fn: Map[E]['handler'],
+        options?: Map[E]['listenerOptions'],
     ): void {
         if (this.eventSources.length > 0) {
             this.eventSources.forEach((evs: EventSource) => {
@@ -106,7 +127,7 @@ export default class Observable<Id extends MapKey = any> {
         }
 
         if (!this.events[name]) {
-            this.events[name] = new ObservableEvent<Id, E>();
+            this.events[name] = new ObservableEvent<Map, E>();
         }
         this.events[name].on(fn, options);
     }
@@ -117,13 +138,10 @@ export default class Observable<Id extends MapKey = any> {
      * @param fn Listener
      * @param options? listener options
      */
-    once<E extends keyof EventMap[Id]>(
+    once<E extends MapKey & keyof Map>(
         name: E,
-        fn: ListenerFunction<
-            GetEventHandlerArguments<Id, E>,
-            GetEventHandlerReturnValue<Id, E>
-        >,
-        options?: ListenerOptions<Id, E>,
+        fn: Map[E]['handler'],
+        options?: Map[E]['listenerOptions'],
     ): void {
         options = options || {};
         options.limit = 1;
@@ -135,14 +153,14 @@ export default class Observable<Id extends MapKey = any> {
      * @param name Event name
      * @param options?
      */
-    promise<E extends keyof EventMap[Id]>(
+    promise<E extends MapKey & keyof Map>(
         name: E,
-        options?: ListenerOptions<Id, E>,
-    ): Promise<GetEventHandlerArguments<Id, E>> {
+        options?: Map[E]['listenerOptions'],
+    ): Promise<Map[E]['handlerArguments']> {
         return new Promise((resolve) => {
             this.once(
                 name,
-                (...args: GetEventHandlerArguments<Id, E>): any => {
+                (...args: Map[E]['handlerArguments']): any => {
                     resolve(args);
                 },
                 options,
@@ -172,12 +190,9 @@ export default class Observable<Id extends MapKey = any> {
      * @param context If you called on() with context you must
      *                         call un() with the same context
      */
-    un<E extends keyof EventMap[Id]>(
+    un<E extends MapKey & keyof Map>(
         name: E,
-        fn: ListenerFunction<
-            GetEventHandlerArguments<Id, E>,
-            GetEventHandlerReturnValue<Id, E>
-        >,
+        fn: Map[E]['handler'],
         context?: object | null,
         tag?: string,
     ): void {
@@ -215,7 +230,18 @@ export default class Observable<Id extends MapKey = any> {
     relay<
         O extends Observable,
         SourceE extends MapKey,
-        ExternalId extends MapKey = O extends Observable<infer Id_> ? Id_ : any,
+        ExternalId extends MapKey | BaseMap = O extends Observable<
+            infer Id_,
+            infer Map_
+        >
+            ? Id_
+            : any,
+        ExternalMap extends BaseMap = O extends Observable<
+            infer Id_,
+            infer Map_
+        >
+            ? Map_
+            : any,
     >(
         eventSource: O,
         eventName: MapKey,
@@ -225,24 +251,25 @@ export default class Observable<Id extends MapKey = any> {
     ) {
         if (eventName === '*') {
             const l = this[proxyType] as unknown as ListenerFunction<
-                GetEventHandlerArguments<ExternalId, SourceE>,
-                GetEventHandlerReturnValue<ExternalId, SourceE>
+                ExternalMap[SourceE]['handlerArguments'],
+                ExternalMap[SourceE]['handlerReturnType']
             >;
-            (eventSource as Observable<ExternalId>).on('*' as SourceE, l, {
-                context: this,
-                replaceArgs: (
-                    l,
-                    args: GetEventArguments<ExternalId, SourceE>,
-                ): GetEventHandlerArguments<ExternalId, SourceE> => {
-                    if (triggerNamePfx) {
-                        args[0] = triggerNamePfx + args[0];
-                    }
-                    return args as GetEventHandlerArguments<
-                        ExternalId,
-                        SourceE
-                    >;
+            (eventSource as unknown as Observable<ExternalId, ExternalMap>).on(
+                '*' as SourceE,
+                l,
+                {
+                    context: this,
+                    replaceArgs: (
+                        l: ExternalMap[SourceE]['listener'],
+                        args: ExternalMap[SourceE]['triggerArguments'],
+                    ): ExternalMap[SourceE]['handlerArguments'] => {
+                        if (triggerNamePfx) {
+                            args[0] = triggerNamePfx + args[0];
+                        }
+                        return args as ExternalMap[SourceE]['handlerArguments'];
+                    },
                 },
-            });
+            );
         } else {
             const l = this[proxyType] as ListenerFunction<any[], any>;
             eventSource.on(eventName, l, {
@@ -260,17 +287,32 @@ export default class Observable<Id extends MapKey = any> {
     unrelay<
         O extends Observable,
         SourceE extends MapKey,
-        ExternalId extends MapKey = O extends Observable<infer Id_> ? Id_ : any,
+        ExternalId extends MapKey | BaseMap = O extends Observable<
+            infer Id_,
+            infer Map_
+        >
+            ? Id_
+            : any,
+        ExternalMap extends BaseMap = O extends Observable<
+            infer Id_,
+            infer Map_
+        >
+            ? Map_
+            : any,
     >(
         eventSource: O,
         eventName: SourceE,
         proxyType: ProxyType = ProxyType.TRIGGER,
     ) {
         const l = this[proxyType] as unknown as ListenerFunction<
-            GetEventHandlerArguments<ExternalId, SourceE>,
-            GetEventHandlerReturnValue<ExternalId, SourceE>
+            ExternalMap[SourceE]['handlerArguments'],
+            ExternalMap[SourceE]['handlerReturnType']
         >;
-        (eventSource as Observable<ExternalId>).un(eventName, l, this);
+        (eventSource as unknown as Observable<ExternalId, ExternalMap>).un(
+            eventName,
+            l,
+            this,
+        );
     }
 
     /**
@@ -326,20 +368,23 @@ export default class Observable<Id extends MapKey = any> {
      * @param name Event name in this observable
      * @param proxyType
      */
-    proxy<E extends keyof EventMap[Id]>(
+    proxy<
+        E extends MapKey & keyof Map,
+        ArgsType extends DefaultArgumentsType = Map[E]['triggerArguments'],
+    >(
         name: E,
         proxyType?: ProxyType,
     ): ProxyListener<
-        GetEventArguments<Id, E>,
-        | GetEventHandlerReturnValue<Id, E>
-        | Promise<GetEventHandlerReturnValue<Id, E> | undefined>
-        | Array<GetEventHandlerReturnValue<Id, E>>
-        | Promise<Array<GetEventHandlerReturnValue<Id, E>>>
+        Map[E]['triggerArguments'],
+        | Map[E]['handlerReturnType']
+        | Promise<Map[E]['handlerReturnType'] | undefined>
+        | Array<Map[E]['handlerReturnType']>
+        | Promise<Array<Map[E]['handlerReturnType']>>
         | undefined
     > {
         const key = (name as string) + '-' + (proxyType || ProxyType.TRIGGER);
         if (!this.external[key]) {
-            this.external[key] = (...args: GetEventArguments<Id, E>) => {
+            this.external[key] = (...args: ArgsType) => {
                 if (
                     proxyType !== undefined &&
                     proxyType !== null &&
@@ -367,12 +412,9 @@ export default class Observable<Id extends MapKey = any> {
      * @param fn Callback function
      * @param context
      */
-    has<E extends keyof EventMap[Id]>(
+    has<E extends MapKey & keyof Map>(
         name?: E,
-        fn?: ListenerFunction<
-            GetEventHandlerArguments<Id, E>,
-            GetEventHandlerReturnValue<Id, E>
-        > | null,
+        fn?: Map[E]['handler'] | null,
         context?: object | null,
         tag?: string,
     ): boolean {
@@ -400,12 +442,9 @@ export default class Observable<Id extends MapKey = any> {
      * @param fn
      * @param context
      */
-    hasListener<E extends keyof EventMap[Id]>(
+    hasListener<E extends MapKey & keyof Map>(
         name?: E,
-        fn?: ListenerFunction<
-            GetEventHandlerArguments<Id, E>,
-            GetEventHandlerReturnValue<Id, E>
-        > | null,
+        fn?: Map[E]['handler'] | null,
         context?: object | null,
         tag?: string,
     ): boolean {
@@ -435,10 +474,10 @@ export default class Observable<Id extends MapKey = any> {
      * @param name Event name
      * @param [...args]
      */
-    all<E extends keyof EventMap[Id]>(
+    all<E extends MapKey & keyof Map>(
         name: E,
-        ...args: GetEventArguments<Id, E>
-    ): Array<GetEventHandlerReturnValue<Id, E>> {
+        ...args: Map[E]['triggerArguments']
+    ): Array<Map[E]['handlerReturnType']> {
         return this._trigger(name, args, TriggerReturnType.ALL);
     }
 
@@ -447,10 +486,10 @@ export default class Observable<Id extends MapKey = any> {
      * @param name Event name
      * @param [...args]
      */
-    resolveAll<E extends keyof EventMap[Id]>(
+    resolveAll<E extends MapKey & keyof Map>(
         name: E,
-        ...args: GetEventArguments<Id, E>
-    ): Promise<Array<GetEventHandlerReturnValue<Id, E>>> {
+        ...args: Map[E]['triggerArguments']
+    ): Promise<Array<Map[E]['handlerReturnType']>> {
         return this._trigger(name, args, TriggerReturnType.ALL, true);
     }
 
@@ -459,10 +498,10 @@ export default class Observable<Id extends MapKey = any> {
      * @param name Event name
      * @param [...args]
      */
-    first<E extends keyof EventMap[Id]>(
+    first<E extends MapKey & keyof Map>(
         name: E,
-        ...args: GetEventArguments<Id, E>
-    ): GetEventHandlerReturnValue<Id, E> | undefined {
+        ...args: Map[E]['triggerArguments']
+    ): Map[E]['handlerReturnType'] | undefined {
         return this._trigger(name, args, TriggerReturnType.FIRST);
     }
 
@@ -471,10 +510,10 @@ export default class Observable<Id extends MapKey = any> {
      * @param name Event name
      * @param [...args]
      */
-    resolveFirst<E extends keyof EventMap[Id]>(
+    resolveFirst<E extends MapKey & keyof Map>(
         name: E,
-        ...args: GetEventArguments<Id, E>
-    ): Promise<GetEventHandlerReturnValue<Id, E> | undefined> {
+        ...args: Map[E]['triggerArguments']
+    ): Promise<Map[E]['handlerReturnType'] | undefined> {
         return this._trigger(name, args, TriggerReturnType.FIRST, true);
     }
 
@@ -483,10 +522,10 @@ export default class Observable<Id extends MapKey = any> {
      * @param name Event name
      * @param [...args]
      */
-    last<E extends keyof EventMap[Id]>(
+    last<E extends MapKey & keyof Map>(
         name: E,
-        ...args: GetEventArguments<Id, E>
-    ): GetEventHandlerReturnValue<Id, E> | undefined {
+        ...args: Map[E]['triggerArguments']
+    ): Map[E]['handlerReturnType'] | undefined {
         return this._trigger(name, args, TriggerReturnType.LAST);
     }
 
@@ -495,10 +534,10 @@ export default class Observable<Id extends MapKey = any> {
      * @param name Event name
      * @param [...args]
      */
-    resolveLast<E extends keyof EventMap[Id]>(
+    resolveLast<E extends MapKey & keyof Map>(
         name: E,
-        ...args: GetEventArguments<Id, E>
-    ): Promise<GetEventHandlerReturnValue<Id, E> | undefined> {
+        ...args: Map[E]['triggerArguments']
+    ): Promise<Map[E]['handlerReturnType'] | undefined> {
         return this._trigger(name, args, TriggerReturnType.LAST, true);
     }
 
@@ -507,10 +546,10 @@ export default class Observable<Id extends MapKey = any> {
      * @param name Event name
      * @param [...args]
      */
-    merge<E extends keyof EventMap[Id]>(
+    merge<E extends MapKey & keyof Map>(
         name: E,
-        ...args: GetEventArguments<Id, E>
-    ): GetEventHandlerReturnValue<Id, E> | undefined {
+        ...args: Map[E]['triggerArguments']
+    ): Map[E]['handlerReturnType'] | undefined {
         return this._trigger(name, args, TriggerReturnType.MERGE);
     }
 
@@ -519,10 +558,10 @@ export default class Observable<Id extends MapKey = any> {
      * @param name Event name
      * @param [...args]
      */
-    resolveMerge<E extends keyof EventMap[Id]>(
+    resolveMerge<E extends MapKey & keyof Map>(
         name: E,
-        ...args: GetEventArguments<Id, E>
-    ): Promise<GetEventHandlerReturnValue<Id, E> | undefined> {
+        ...args: Map[E]['triggerArguments']
+    ): Promise<Map[E]['handlerReturnType'] | undefined> {
         return this._trigger(name, args, TriggerReturnType.MERGE, true);
     }
 
@@ -531,10 +570,10 @@ export default class Observable<Id extends MapKey = any> {
      * @param name Event name
      * @param [...args]
      */
-    concat<E extends keyof EventMap[Id]>(
+    concat<E extends MapKey & keyof Map>(
         name: E,
-        ...args: GetEventArguments<Id, E>
-    ): Array<GetEventHandlerReturnValue<Id, E>> {
+        ...args: Map[E]['triggerArguments']
+    ): Array<Map[E]['handlerReturnType']> {
         return this._trigger(name, args, TriggerReturnType.CONCAT);
     }
 
@@ -543,10 +582,10 @@ export default class Observable<Id extends MapKey = any> {
      * @param name Event name
      * @param [...args]
      */
-    resolveConcat<E extends keyof EventMap[Id]>(
+    resolveConcat<E extends MapKey & keyof Map>(
         name: E,
-        ...args: GetEventArguments<Id, E>
-    ): Promise<Array<GetEventHandlerReturnValue<Id, E>>> {
+        ...args: Map[E]['triggerArguments']
+    ): Promise<Array<Map[E]['handlerReturnType']>> {
         return this._trigger(name, args, TriggerReturnType.CONCAT, true);
     }
 
@@ -555,10 +594,10 @@ export default class Observable<Id extends MapKey = any> {
      * @param name Event name
      * @param [...args]
      */
-    firstNonEmpty<E extends keyof EventMap[Id]>(
+    firstNonEmpty<E extends MapKey & keyof Map>(
         name: E,
-        ...args: GetEventArguments<Id, E>
-    ): GetEventHandlerReturnValue<Id, E> | undefined {
+        ...args: Map[E]['triggerArguments']
+    ): Map[E]['handlerReturnType'] | undefined {
         return this._trigger(name, args, TriggerReturnType.FIRST_NON_EMPTY);
     }
 
@@ -567,10 +606,10 @@ export default class Observable<Id extends MapKey = any> {
      * @param name Event name
      * @param [...args]
      */
-    resolveFirstNonEmpty<E extends keyof EventMap[Id]>(
+    resolveFirstNonEmpty<E extends MapKey & keyof Map>(
         name: E,
-        ...args: GetEventArguments<Id, E>
-    ): Promise<GetEventHandlerReturnValue<Id, E> | undefined> {
+        ...args: Map[E]['triggerArguments']
+    ): Promise<Map[E]['handlerReturnType'] | undefined> {
         return this._trigger(
             name,
             args,
@@ -584,9 +623,9 @@ export default class Observable<Id extends MapKey = any> {
      * @param name Event name
      * @param [...args]
      */
-    untilTrue<E extends keyof EventMap[Id]>(
+    untilTrue<E extends MapKey & keyof Map>(
         name: E,
-        ...args: GetEventArguments<Id, E>
+        ...args: Map[E]['triggerArguments']
     ): void {
         this._trigger(name, args, TriggerReturnType.UNTIL_TRUE);
     }
@@ -596,9 +635,9 @@ export default class Observable<Id extends MapKey = any> {
      * @param name Event name
      * @param [...args]
      */
-    untilFalse<E extends keyof EventMap[Id]>(
+    untilFalse<E extends MapKey & keyof Map>(
         name: E,
-        ...args: GetEventArguments<Id, E>
+        ...args: Map[E]['triggerArguments']
     ): void {
         this._trigger(name, args, TriggerReturnType.UNTIL_FALSE);
     }
@@ -608,10 +647,10 @@ export default class Observable<Id extends MapKey = any> {
      * @param name Event name
      * @param [...args]
      */
-    pipe<E extends keyof EventMap[Id]>(
+    pipe<E extends MapKey & keyof Map>(
         name: E,
-        ...args: GetEventArguments<Id, E>
-    ): GetEventHandlerReturnValue<Id, E> | undefined {
+        ...args: Map[E]['triggerArguments']
+    ): Map[E]['handlerReturnType'] | undefined {
         return this._trigger(name, args, TriggerReturnType.PIPE);
     }
 
@@ -621,10 +660,10 @@ export default class Observable<Id extends MapKey = any> {
      * @param name Event name
      * @param [...args]
      */
-    resolvePipe<E extends keyof EventMap[Id]>(
+    resolvePipe<E extends MapKey & keyof Map>(
         name: E,
-        ...args: GetEventArguments<Id, E>
-    ): Promise<GetEventHandlerReturnValue<Id, E> | undefined> {
+        ...args: Map[E]['triggerArguments']
+    ): Promise<Map[E]['handlerReturnType'] | undefined> {
         return this._trigger(name, args, TriggerReturnType.PIPE, true);
     }
 
@@ -633,10 +672,10 @@ export default class Observable<Id extends MapKey = any> {
      * @param name Event name
      * @param [...args]
      */
-    raw<E extends keyof EventMap[Id]>(
+    raw<E extends MapKey & keyof Map>(
         name: E,
-        ...args: GetEventArguments<Id, E>
-    ): Array<GetEventHandlerReturnValue<Id, E>> {
+        ...args: Map[E]['triggerArguments']
+    ): Array<Map[E]['handlerReturnType']> {
         return this._trigger(name, args, TriggerReturnType.RAW);
     }
 
@@ -645,36 +684,36 @@ export default class Observable<Id extends MapKey = any> {
      * @param name
      * @param [...args]
      */
-    trigger<E extends keyof EventMap[Id]>(
+    trigger<E extends MapKey & keyof Map>(
         name: E,
-        ...args: GetEventArguments<Id, E>
+        ...args: Map[E]['triggerArguments']
     ): void {
         this._trigger(name, args, undefined, undefined);
     }
 
-    _trigger<E extends keyof EventMap[Id]>(
+    _trigger<E extends MapKey & keyof Map>(
         name: E,
-        args: GetEventArguments<Id, E>,
+        args: Map[E]['triggerArguments'],
         returnType:
             | TriggerReturnType.ALL
             | TriggerReturnType.CONCAT
             | TriggerReturnType.RAW,
         resolve?: false,
-    ): Array<GetEventHandlerReturnValue<Id, E>>;
+    ): Array<Map[E]['handlerReturnType']>;
 
-    _trigger<E extends keyof EventMap[Id]>(
+    _trigger<E extends MapKey & keyof Map>(
         name: E,
-        args: GetEventArguments<Id, E>,
+        args: Map[E]['triggerArguments'],
         returnType:
             | TriggerReturnType.ALL
             | TriggerReturnType.CONCAT
             | TriggerReturnType.RAW,
         resolve: true,
-    ): Promise<Array<GetEventHandlerReturnValue<Id, E>>>;
+    ): Promise<Array<Map[E]['handlerReturnType']>>;
 
-    _trigger<E extends keyof EventMap[Id]>(
+    _trigger<E extends MapKey & keyof Map>(
         name: E,
-        args: GetEventArguments<Id, E>,
+        args: Map[E]['triggerArguments'],
         returnType:
             | TriggerReturnType.FIRST
             | TriggerReturnType.LAST
@@ -682,11 +721,11 @@ export default class Observable<Id extends MapKey = any> {
             | TriggerReturnType.PIPE
             | TriggerReturnType.MERGE,
         resolve?: false,
-    ): GetEventHandlerReturnValue<Id, E> | undefined;
+    ): Map[E]['handlerReturnType'] | undefined;
 
-    _trigger<E extends keyof EventMap[Id]>(
+    _trigger<E extends MapKey & keyof Map>(
         name: E,
-        args: GetEventArguments<Id, E>,
+        args: Map[E]['triggerArguments'],
         returnType:
             | TriggerReturnType.FIRST
             | TriggerReturnType.LAST
@@ -694,11 +733,11 @@ export default class Observable<Id extends MapKey = any> {
             | TriggerReturnType.PIPE
             | TriggerReturnType.MERGE,
         resolve: true,
-    ): Promise<GetEventHandlerReturnValue<Id, E> | undefined>;
+    ): Promise<Map[E]['handlerReturnType'] | undefined>;
 
-    _trigger<E extends keyof EventMap[Id]>(
+    _trigger<E extends MapKey & keyof Map>(
         name: E,
-        args: GetEventArguments<Id, E>,
+        args: Map[E]['triggerArguments'],
         returnType:
             | TriggerReturnType.UNTIL_FALSE
             | TriggerReturnType.UNTIL_TRUE
@@ -707,9 +746,9 @@ export default class Observable<Id extends MapKey = any> {
         resolve?: false,
     ): undefined;
 
-    _trigger<E extends keyof EventMap[Id]>(
+    _trigger<E extends MapKey & keyof Map>(
         name: E,
-        args: GetEventArguments<Id, E>,
+        args: Map[E]['triggerArguments'],
         returnType:
             | TriggerReturnType.UNTIL_FALSE
             | TriggerReturnType.UNTIL_TRUE
@@ -718,14 +757,14 @@ export default class Observable<Id extends MapKey = any> {
         resolve: true,
     ): Promise<undefined>;
 
-    _trigger<E extends keyof EventMap[Id]>(
+    _trigger<E extends MapKey & keyof Map>(
         name: E,
-        args: GetEventArguments<Id, E>,
+        args: Map[E]['triggerArguments'],
         returnType?: TriggerReturnType | null,
         resolve?: boolean,
     ):
-        | TriggerReturnValue<GetEventHandlerReturnValue<Id, E>>
-        | Promise<TriggerReturnValue<GetEventHandlerReturnValue<Id, E>>> {
+        | TriggerReturnValue<Map[E]['handlerReturnType']>
+        | Promise<TriggerReturnValue<Map[E]['handlerReturnType']>> {
         if (this.interceptor) {
             if (
                 this.interceptor(
@@ -740,7 +779,7 @@ export default class Observable<Id extends MapKey = any> {
         }
 
         const events = this.events;
-        let e: ObservableEvent<Id, E>;
+        let e: ObservableEvent<Map, E>;
         let result;
 
         if ((e = events[name])) {
@@ -754,9 +793,10 @@ export default class Observable<Id extends MapKey = any> {
 
         // trigger * event with current event name
         // as first argument
-        if ((e = events['*'])) {
-            (e as ObservableEvent<Id, '*'>).trigger(
-                [name, ...(args || [])] as GetEventArguments<Id, '*'>,
+        let asterisk;
+        if ((asterisk = events['*'] as ObservableEvent<Map, '*'>)) {
+            asterisk.trigger(
+                [name, ...(args || [])] as Map['*']['triggerArguments'],
                 null,
                 this._tags,
             );
@@ -771,7 +811,7 @@ export default class Observable<Id extends MapKey = any> {
      * @param name Event name
      * @param withQueue enable events queue
      */
-    suspendEvent<E extends keyof EventMap[Id]>(
+    suspendEvent<E extends MapKey & keyof Map>(
         name: E,
         withQueue: boolean = false,
     ) {
@@ -786,7 +826,7 @@ export default class Observable<Id extends MapKey = any> {
      * Check if event was suspended
      * @param name Event name
      */
-    isSuspended<E extends keyof EventMap[Id]>(name: E): boolean {
+    isSuspended<E extends MapKey & keyof Map>(name: E): boolean {
         const events = this.events;
         if (!events[name]) {
             return false;
@@ -798,7 +838,7 @@ export default class Observable<Id extends MapKey = any> {
      * Check if event was suspended with queue
      * @param name Event name
      */
-    isQueued<E extends keyof EventMap[Id]>(name: E): boolean {
+    isQueued<E extends MapKey & keyof Map>(name: E): boolean {
         const events = this.events;
         if (!events[name]) {
             return false;
@@ -810,7 +850,7 @@ export default class Observable<Id extends MapKey = any> {
      * Check if event has queued calls
      * @param name Event name (optional)
      */
-    hasQueue<E extends keyof EventMap[Id]>(name?: E): boolean {
+    hasQueue<E extends MapKey & keyof Map>(name?: E): boolean {
         const events = this.events;
         if (name) {
             if (!events[name]) {
@@ -845,7 +885,7 @@ export default class Observable<Id extends MapKey = any> {
      * Resume suspended event.
      * @param name Event name
      */
-    resumeEvent<E extends keyof EventMap[Id]>(name: E) {
+    resumeEvent<E extends MapKey & keyof Map>(name: E) {
         if (!this.events[name]) {
             return;
         }
@@ -862,7 +902,7 @@ export default class Observable<Id extends MapKey = any> {
     /**
      * @param name Event name
      */
-    destroyEvent<E extends keyof EventMap[Id]>(name: E) {
+    destroyEvent<E extends MapKey & keyof Map>(name: E) {
         const events = this.events;
         if (events[name]) {
             events[name].removeAllListeners();
@@ -871,7 +911,7 @@ export default class Observable<Id extends MapKey = any> {
         }
     }
 
-    getPublicApi(): ObservablePubliApi<Id> {
+    getPublicApi(): ObservablePubliApi<Map> {
         if (this.publicApi === null) {
             this.publicApi = {
                 on: this.on.bind(this),
@@ -896,7 +936,7 @@ export default class Observable<Id extends MapKey = any> {
             this.destroyEvent(name);
         }
 
-        this.events = {} as EventStore<Id>;
+        this.events = {} as EventStore<Map>;
         this.external = {};
         this.eventSources = [];
         this.publicApi = null;
