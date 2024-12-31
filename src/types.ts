@@ -125,17 +125,22 @@ export type GetFirstKnownArgument<
 export type ConstructHandlerFromMap<
     Map extends BaseMap = any,
     E extends MapKey & keyof Map = any,
-> = [Map[E]] extends [
-    {
-        triggerArguments?: infer TArgs extends Array<any>;
-        handlerArguments?: infer HArgs extends Array<any>;
-        handlerReturnType?: infer Ret;
-    },
-]
-    ? (
-          ...args: GetFirstKnownArgument<HArgs, TArgs, DefaultArgumentsType>
-      ) => [unknown] extends [Ret] ? DefaultReturnType : Ret
-    : DefaultHandler;
+    Args extends DefaultArgumentsType = [Map[E]] extends [
+        {
+            triggerArguments?: infer TArgs extends Array<any>;
+            handlerArguments?: infer HArgs extends Array<any>;
+        },
+    ]
+        ? GetFirstKnownArgument<HArgs, TArgs, DefaultArgumentsType>
+        : DefaultArgumentsType,
+    Ret extends DefaultReturnType = [Map[E]] extends [
+        {
+            handlerReturnType?: infer Ret;
+        },
+    ]
+        ? Ret
+        : DefaultReturnType,
+> = (...args: Args) => Ret;
 
 export type GetHandlerArgumentsFromMap<
     Map extends BaseMap = any,
@@ -172,39 +177,6 @@ export type GetHandlerReturnTypeFromMap<
 ]
     ? Ret
     : DefaultReturnType;
-
-// export type GetEventArguments<
-//     Id extends MapKey,
-//     E extends MapKey,
-// > = Id extends keyof EventMap
-//     ? E extends keyof EventMap[Id]
-//         ? [EventMap[Id][E]['triggerArguments']] extends [undefined]
-//             ? GenericEventArguments
-//             : EventMap[Id][E]['triggerArguments']
-//         : GenericEventArguments
-//     : GenericEventArguments;
-
-// export type GetEventHandlerReturnValue<
-//     Id extends MapKey,
-//     E extends MapKey,
-// > = Id extends keyof EventMap
-//     ? E extends keyof EventMap[Id]
-//         ? [EventMap[Id][E]['handlerReturnType']] extends [undefined]
-//             ? GenericEventHandlerReturnValue
-//             : EventMap[Id][E]['handlerReturnType']
-//         : GenericEventHandlerReturnValue
-//     : GenericEventHandlerReturnValue;
-
-// export type GetEventHandlerArguments<
-//     Id extends MapKey,
-//     E extends MapKey,
-// > = Id extends keyof EventMap
-//     ? E extends keyof EventMap[Id]
-//         ? [EventMap[Id][E]['handlerArguments']] extends [undefined]
-//             ? GetEventArguments<Id, E>
-//             : EventMap[Id][E]['handlerArguments']
-//         : GenericEventArguments
-//     : GenericEventArguments;
 
 export enum TriggerReturnType {
     RAW = 'raw',
