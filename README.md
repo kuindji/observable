@@ -1,117 +1,129 @@
 # Observable
+
 A javascript event bus implementing multiple patterns: observable, collector and pipe.
 
 #### v2 is incomptable with v1, it is a complete rewrite.
 
 ### Observable:
+
 ```javascript
-const Observable = require("@kuindji/observable");
-const o = new Observable;
-o.on("event", (x, y, z) => console.log([x, y, z]));
-o.trigger("event", 1, 2, 3); // [1, 2, 3]
+const Observable = require('@kuindji/observable');
+const o = new Observable();
+o.on('event', (x, y, z) => console.log([x, y, z]));
+o.trigger('event', 1, 2, 3); // [1, 2, 3]
 // other methods:
-o.untilTrue("event");
-o.untilFalse("event");
+o.untilTrue('event');
+o.untilFalse('event');
 ```
 
 ### Collector:
+
 ```javascript
-const Observable = require("@kuindji/observable");
-const o = new Observable;
-o.on("collectStuff", () => 1);
-o.on("collectStuff", () => 2);
-const results = o.all("collectStuff"); // [1, 2]
+const Observable = require('@kuindji/observable');
+const o = new Observable();
+o.on('collectStuff', () => 1);
+o.on('collectStuff', () => 2);
+const results = o.all('collectStuff'); // [1, 2]
 ```
+
 ```javascript
-const Observable = require("@kuindji/observable");
-const o = new Observable;
-o.on("collectStuff", () => Promise.resolve(1));
-o.on("collectStuff", () => Promise.resolve(2));
-o.on("collectStuff", () => 3);
-const results = await o.resolveAll("collectStuff"); // [1, 2, 3]
+const Observable = require('@kuindji/observable');
+const o = new Observable();
+o.on('collectStuff', () => Promise.resolve(1));
+o.on('collectStuff', () => Promise.resolve(2));
+o.on('collectStuff', () => 3);
+const results = await o.resolveAll('collectStuff'); // [1, 2, 3]
 ```
+
 Other collector methods:
+
 ```javascript
-o.first("event");
-o.last("event");
-o.firstNonEmpty("event");
-o.concat("event");
-o.merge("event");
-o.raw("event");
+o.first('event');
+o.last('event');
+o.firstNonEmpty('event');
+o.concat('event');
+o.merge('event');
+o.raw('event');
 ```
 
 ### Pipe:
+
 ```javascript
-const Observable = require("@kuindji/observable");
-const o = new Observable;
-o.on("some-job", (value) => value + value);
-o.on("some-job", (value) => value * value);
-const result = o.pipe("some-job", 1); // 4
+const Observable = require('@kuindji/observable');
+const o = new Observable();
+o.on('some-job', (value) => value + value);
+o.on('some-job', (value) => value * value);
+const result = o.pipe('some-job', 1); // 4
 ```
+
 ```javascript
-const Observable = require("@kuindji/observable");
-const o = new Observable;
-o.on("some-job", (value) => Promise.resolve(value + value));
-o.on("some-job", (value) => Promise.resolve(value * value));
-const result = await o.resolvePipe("some-job", 1); // 4
+const Observable = require('@kuindji/observable');
+const o = new Observable();
+o.on('some-job', (value) => Promise.resolve(value + value));
+o.on('some-job', (value) => Promise.resolve(value * value));
+const result = await o.resolvePipe('some-job', 1); // 4
 ```
 
 ### Autotrigger:
+
 ```javascript
-const o = new Observable;
-o.setEventOptions("auto", { autoTrigger: true });
+const o = new Observable();
+o.setEventOptions('auto', { autoTrigger: true });
 // trigger first
-o.trigger("auto", 1, 2);
+o.trigger('auto', 1, 2);
 // subscribe later
-o.on("auto", (a, b) => console.log(a, b)); // immediately logs 1, 2
+o.on('auto', (a, b) => console.log(a, b)); // immediately logs 1, 2
 ```
 
 ### Promise:
+
 ```javascript
-const o = new Observable;
-o.promise("event").then(payload => console.log(payload));
-o.trigger("event", { data: "hello world" });
+const o = new Observable();
+o.promise('event').then((payload) => console.log(payload));
+o.trigger('event', { data: 'hello world' });
 ```
 
-
 ### Relay:
+
 ```javascript
-const o1 = new Observable;
-const o2 = new Observable;
+const o1 = new Observable();
+const o2 = new Observable();
 
-o2.relay(o1, "some-event");
-o2.on("some-event", () => console.log("OK!"));
-o1.trigger("some-event"); // OK!
+o2.relay(o1, 'some-event');
+o2.on('some-event', () => console.log('OK!'));
+o1.trigger('some-event'); // OK!
 
-o2.relay(o1, "another-event", "local-name");
-o2.on("local-name", () => console.log("OK!"));
-o1.trigger("another-event"); // OK!
+o2.relay(o1, 'another-event', 'local-name');
+o2.on('local-name', () => console.log('OK!'));
+o1.trigger('another-event'); // OK!
 
-o2.unrelay(o1, "some-event");
+o2.unrelay(o1, 'some-event');
 
-const o = new Observable;
+const o = new Observable();
 const eventEmitter = new EventEmitter();
 // simple proxy for one specific event
-eventEmitter.on("source-event", o.proxy("target-event"));
-o.on("target-event", () => console.log("ok"));
-eventEmitter.emit("source-event"); // ok
+eventEmitter.on('source-event', o.proxy('target-event'));
+o.on('target-event', () => console.log('ok'));
+eventEmitter.emit('source-event'); // ok
 
 // full proxy to another event bus
 o.addEventSource({
-    name: "EventEmitter",
-    on: (eventName, listener) => eventEmitter.on(eventName.replace("emitter-", ""), listener),
-    un: (eventName, listener) => eventEmitter.off(eventName.replace("emitter-", ""), listener),
-    accepts: (eventName) => eventName.indexOf("emitter-") === 0
+    name: 'EventEmitter',
+    on: (eventName, listener) =>
+        eventEmitter.on(eventName.replace('emitter-', ''), listener),
+    un: (eventName, listener) =>
+        eventEmitter.off(eventName.replace('emitter-', ''), listener),
+    accepts: (eventName) => eventName.indexOf('emitter-') === 0,
 });
-o.on("emitter-event", () => console.log("triggered from EventEmitter"));
-eventEmitter.emit("event"); // triggered from EventEmitter
-
+o.on('emitter-event', () => console.log('triggered from EventEmitter'));
+eventEmitter.emit('event'); // triggered from EventEmitter
 ```
 
 ### Filter:
-```javascript 
-const o = new Observable;
-o.setEventOptions("filtered", {
+
+```javascript
+const o = new Observable();
+o.setEventOptions('filtered', {
     filter: (args, l) => {
         if (l.extraData?.always) {
             return true;
@@ -120,33 +132,35 @@ o.setEventOptions("filtered", {
             return true;
         }
         return false;
-    }
+    },
 });
 
-o.on("filtered", () => console.log("always"), {
-    extraData: { always: true }
+o.on('filtered', () => console.log('always'), {
+    extraData: { always: true },
 });
 
-o.on("filtered", () => console.log("param"), {
-    extraData: { param: 1 }
+o.on('filtered', () => console.log('param'), {
+    extraData: { param: 1 },
 });
 
-o.trigger("filtered", 2); // "always"
-o.trigger("filtered", 1); // "always", "param"
+o.trigger('filtered', 2); // "always"
+o.trigger('filtered', 1); // "always", "param"
 ```
 
 ### Any event:
+
 ```javascript
-const o = new Observable;
-o.on("*", (eventName, x, y) => console.log(eventName, x, y));
-o.trigger("event1", 1, 2); // prints event1 1 2
-o.trigger("event2", 3, 4); // prints event2 3 4
+const o = new Observable();
+o.on('*', (eventName, x, y) => console.log(eventName, x, y));
+o.trigger('event1', 1, 2); // prints event1 1 2
+o.trigger('event2', 3, 4); // prints event2 3 4
 ```
 
 ### Typed events:
+
 ```javascript
 // You can define event handler signatures
-// by extending the module:
+// by extending the module or providing event map directly:
 import Observable, { EventMap, EventMapDefinition } from "@kuindji/observable";
 
 const observableId = Symbol();
@@ -173,26 +187,38 @@ declare module "@kuindji/observable" {
     }
 }
 
+type AnotherEventMap = {
+    "my-event": EventDefinition<
+        [string, boolean],
+        number
+    >
+}
+
+// passing event map ids
 const o1 = new Observable<"text-id">();
 const o2 = new Observable<typeof observableId>();
+// passing event map without module augmentation
+const o3 = new Observable<AnotherEventMap>();
+// combining both methods
+const o4 = new Observable<"text-id" | AnotherEventMap>();
 
 // now when you use on(), trigger() and other functions
 // you will see type hints
 
 o1.on(
-    "event", 
+    "event",
     (creds: {username: string; password: string}) => true
 );
 o1.trigger("event", {username: "admin", password: "123"});
-
 o2.trigger("event", "string", true);
+o3.trigger("my-event", "string", true);
 
 // You can define event signatures in various ways:
 
 declare module "@kuindji/observable" {
     interface EventMap {
         // using EventMapDefinition is preferable
-        // as it also defines "*" event 
+        // as it also defines "*" event
         // and may define something else in future.
         "observable-id": EventMapDefinition<{
             "event": EventDefinition<
@@ -224,14 +250,15 @@ declare module "@kuindji/observable" {
 ```
 
 ### API:
+
 ```javascript
 // Subscribe to event
 // Returns listener id which can be used in un()
 o.on(
-    /* There is a special event name "*" 
+    /* There is a special event name "*"
      * Listeners of this event will be triggered on any event
      * as receive event name as the first argument.
-     * 
+     *
      * Event names are case sensitive
      */
     /* required */ "eventName",
@@ -244,7 +271,7 @@ o.on(
         "tags": [],
 
         /*
-         * This function will be called each time event is triggered. 
+         * This function will be called each time event is triggered.
          * Return false to skip listener.
          */
         "filter": function(args, listener?) {},
@@ -278,7 +305,7 @@ o.on(
         // replace with these arguments when calling the listener
         "replaceArgs": array || (listener, args) => [],
 
-        // Run event asynchronously. 
+        // Run event asynchronously.
         // number = number of milliseconds
         // true = 0ms
         "async": boolean || number
@@ -345,7 +372,7 @@ o.un(
 
 // Relay another Observable's event
 o.relay(
-    /* required */ anotherObservable, 
+    /* required */ anotherObservable,
     /* required */ "eventName" || "*",
 
     // when relaying all events ("*"),
@@ -362,7 +389,7 @@ o.relay(
 
 // Stop relaying events
 o.unrelay(
-    /* required */ anotherObservable, 
+    /* required */ anotherObservable,
     /* required */ "eventName" || "*"
 );
 
@@ -395,7 +422,7 @@ o.resumeAllEvents();
 o.isSuspended("eventName");
 o.isQueued("eventName");
 o.hasQueue(/* optional */ "eventName");
-// if event is suspended with queue, all trigger calls will be queued 
+// if event is suspended with queue, all trigger calls will be queued
 // and replayed once event is resumed (good for batch() behavior)
 
 // Intercept all triggers and return boolean to allow or disallow
@@ -418,7 +445,7 @@ o.removeAllListeners("eventName", /* optional */ "tagName");
 
 
 /*
- * Listener context 
+ * Listener context
  */
 class A = {
     handler() {}
@@ -433,10 +460,10 @@ o.on("event", b.handler, { context: b });
 /*
  * Create event
  * Events don't have to be "created" in order to be triggered.
- * Use this api to specify event's behaviour. 
+ * Use this api to specify event's behaviour.
  */
 o.setEventOptions(
-    /* required */ "eventName", 
+    /* required */ "eventName",
     /* optional */ {
         /*
          * once triggered, all future subscribers will be automatically called
@@ -445,7 +472,7 @@ o.setEventOptions(
         "autoTrigger": boolean,
 
         /*
-         * This function will be called each time event is triggered. 
+         * This function will be called each time event is triggered.
          * Return false to skip listener.
          */
         "filter": function(args, listener?) {},
@@ -474,7 +501,7 @@ o.setEventOptions(
 );
 
 // Public api
-const api = o.getPublicApi(); 
+const api = o.getPublicApi();
 // { on(), un(), once(), has() }
 // o.getPublicApi() === o.getPublicApi()
 
