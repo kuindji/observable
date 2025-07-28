@@ -3,22 +3,29 @@ export interface BaseMap {
     [key: MapKey]: any;
 }
 
-type CommonKeys<T extends object> = keyof T;
-type AllKeys<T> = T extends any ? keyof T : never;
-type Subtract<A, C> = A extends C ? never : A;
-type NonCommonKeys<T extends object> = Subtract<AllKeys<T>, CommonKeys<T>>;
-type PickType<T, K extends AllKeys<T>> = T extends { [k in K]?: any }
-    ? T[K]
-    : undefined;
-export type Merge<T extends object> = {
-    [k in NonCommonKeys<T>]: Exclude<PickType<T, k>, undefined>;
-};
+// type CommonKeys<T extends object> = keyof T;
+// type AllKeys<T> = T extends any ? keyof T : never;
+// type Subtract<A, C> = A extends C ? never : A;
+// type NonCommonKeys<T extends object> = Subtract<AllKeys<T>, CommonKeys<T>>;
+// type PickType<T, K extends AllKeys<T>> = T extends { [k in K]?: any }
+//     ? T[K]
+//     : undefined;
+// export type Merge<T extends object> = {
+//     [k in NonCommonKeys<T>]: Exclude<PickType<T, k>, undefined>;
+// };
 type UnionToIntersection<U> = (U extends any ? (x: U) => void : never) extends (
     x: infer I,
 ) => void
     ? I
     : never;
 type IsUnion<T> = [T] extends [UnionToIntersection<T>] ? false : true;
+
+type _Merge<
+    T,
+    K extends PropertyKey = T extends unknown ? keyof T : never,
+> = T extends unknown ? T & Record<Exclude<K, keyof T>, never> : never;
+
+export type Merge<T> = { [K in keyof _Merge<T>]: _Merge<T>[K] };
 
 export type ConstructSingleMap<
     IdOrMap extends MapKey | object = never,
@@ -99,8 +106,6 @@ export type EventDefinition<
     handlerReturnType: R;
 };
 
-// export type EventMapDefinition<M extends object> = M;
-
 export type EventMapDefinition<M extends object> = Merge<
     | {
           '*': EventDefinition<any[], any, [MapKey, ...any[]]>;
@@ -113,8 +118,6 @@ export interface EventMap {
         [key: MapKey]: object;
     };
 }
-
-type B1 = [never] extends [any[]] ? true : false;
 
 export type GetFirstKnownArgument<
     T1 extends Array<any>,
