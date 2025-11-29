@@ -1,6 +1,7 @@
 {
     "name": "@kuindji/observable",
     "version": "2.6.1",
+    "deprecated": "This package is deprecated. Please use @kuindji/reactive instead.",
     "description": "A javascript event bus implementing multiple patterns: observable, collector and pipe.",
     "main": "dist/index.js",
     "types": "dist/index.d.ts",
